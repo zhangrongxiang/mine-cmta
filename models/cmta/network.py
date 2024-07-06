@@ -336,13 +336,13 @@ class CMTA(nn.Module):
             fusion_hy= self.hyperbolic_mm(hy_features)
 
             # Define the origin point on the manifold for logmap
-            origin = torch.zeros_like(fusion_hy.tensor)  # Assuming the origin is a zero tensor of the same shape
+            # origin = torch.zeros_like(fusion_hy.tensor)  # Assuming the origin is a zero tensor of the same shape
 
             # Map the fusion tensor back to Euclidean space using the logarithmic map
-            log_mapped_fusion = manifold.logmap(origin, fusion_hy)
+            # log_mapped_fusion = manifold.logmap(origin, fusion_hy)
 
             # Step 7: Retrieve the tensor from the log-mapped structure
-            fusion = log_mapped_fusion.tensor
+            fusion = fusion_hy.tensor
         else:
             raise NotImplementedError("Fusion [{}] is not implemented".format(self.fusion))
         # fusion=( cls_token_genomics_decoder +  cls_token_genomics_encoder) / 2
