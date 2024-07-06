@@ -320,8 +320,8 @@ class CMTA(nn.Module):
         elif self.fusion == "hyperbolic":
             # Step 1: Compute the average of pathomics encoder and decoder cls tokens
             print("hyperbolic")
-            pathomics_avg = (cls_token_pathomics_encoder.tensor + cls_token_pathomics_decoder.tensor) / 2
-            genomics_avg = (cls_token_genomics_encoder.tensor + cls_token_genomics_decoder.tensor) / 2
+            pathomics_avg = (cls_token_pathomics_encoder + cls_token_pathomics_decoder) / 2
+            genomics_avg = (cls_token_genomics_encoder + cls_token_genomics_decoder) / 2
 
             # Step 2: Concatenate the averaged features from pathomics and genomics
             concatenated_features = torch.cat((pathomics_avg, genomics_avg), dim=1)
