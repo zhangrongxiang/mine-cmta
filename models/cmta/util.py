@@ -46,17 +46,17 @@ class BilinearFusion(nn.Module):
     """
 
     def __init__(
-        self,
-        skip=0,
-        use_bilinear=0,
-        gate1=1,
-        gate2=1,
-        dim1=128,
-        dim2=128,
-        scale_dim1=1,
-        scale_dim2=1,
-        mmhid=256,
-        dropout_rate=0.25,
+            self,
+            skip=0,
+            use_bilinear=0,
+            gate1=1,
+            gate2=1,
+            dim1=128,
+            dim2=128,
+            scale_dim1=1,
+            scale_dim2=1,
+            mmhid=256,
+            dropout_rate=0.25,
     ):
         super(BilinearFusion, self).__init__()
         self.skip = skip
@@ -165,16 +165,16 @@ def moore_penrose_iter_pinv(x, iters=6):
 # main attention class
 class NystromAttention(nn.Module):
     def __init__(
-        self,
-        dim,
-        dim_head=64,
-        heads=8,
-        num_landmarks=256,
-        pinv_iterations=6,
-        residual=True,
-        residual_conv_kernel=33,
-        eps=1e-8,
-        dropout=0.0,
+            self,
+            dim,
+            dim_head=64,
+            heads=8,
+            num_landmarks=256,
+            pinv_iterations=6,
+            residual=True,
+            residual_conv_kernel=33,
+            eps=1e-8,
+            dropout=0.0,
     ):
         super().__init__()
         self.eps = eps
@@ -184,7 +184,7 @@ class NystromAttention(nn.Module):
         self.pinv_iterations = pinv_iterations
 
         self.heads = heads
-        self.scale = dim_head**-0.5
+        self.scale = dim_head ** -0.5
         self.to_qkv = nn.Linear(dim, inner_dim * 3, bias=False)
 
         self.to_out = nn.Sequential(nn.Linear(inner_dim, dim), nn.Dropout(dropout))
@@ -304,20 +304,72 @@ class FeedForward(nn.Module):
         return self.net(x)
 
 
+class FFNExpert(nn.Module):
+    def __init__(self, input_dim, hidden_dim):
+        super(FFNExpert, self).__init__()
+        self.fc1 = nn.Linear(input_dim, hidden_dim)
+        self.bn1 = nn.LayerNorm(hidden_dim)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(hidden_dim, input_dim)
+        self.bn2 = nn.LayerNorm(input_dim)
+
+    def forward(self, x):
+        x = self.relu(self.bn1(self.fc1(x)))
+        x = self.bn2(self.fc2(x))
+        return x
+
+
+class MoE(nn.Module):
+    def __init__(self, input_dim=512, num_experts=4, k=2):
+        super(MoE, self).__init__()
+        self.k = k
+        self.gate = nn.Linear(input_dim, num_experts)
+        self.experts = nn.ModuleList(
+            [FFNExpert(input_dim, input_dim) for _ in range(num_experts)])  # Updated to have input_dim output
+
+    def forward(self, x):
+        # x shape: [B, N, input_dim]
+        B, N, input_dim = x.shape
+
+        # Reshape x to [B*N, input_dim] for processing
+        x_reshaped = x.view(B * N, input_dim)
+        gate_scores = self.gate(x_reshaped)  # [B*N, num_experts]
+        topk_scores, topk_indices = gate_scores.view(B, N, -1).topk(self.k, dim=2)  # [B, N, k]
+
+        # Initialize the output tensor
+        expert_outputs = torch.zeros(B, N, self.k, input_dim,
+                                     device=x.device)  # Ensure output dimensions match input_dim
+
+        # Apply the selected experts to the input
+        for b in range(B):
+            for n in range(N):
+                for i, idx in enumerate(topk_indices[b, n]):
+                    expert_outputs[b, n, i] = self.experts[idx](x[b, n].unsqueeze(0))
+
+        weights = torch.softmax(topk_scores, dim=2).unsqueeze(-1)  # [B, N, k, 1]
+        output = (weights * expert_outputs).sum(dim=2)  # [B, N, input_dim]
+
+        output = output + x
+
+        return output
+
+
 class Nystromformer(nn.Module):
     def __init__(
-        self,
-        *,
-        dim,
-        depth,
-        dim_head=64,
-        heads=8,
-        num_landmarks=256,
-        pinv_iterations=6,
-        attn_values_residual=True,
-        attn_values_residual_conv_kernel=33,
-        attn_dropout=0.0,
-        ff_dropout=0.0
+            self,
+            *,
+            dim,
+            depth,
+            dim_head=64,
+            heads=8,
+            num_landmarks=256,
+            pinv_iterations=6,
+            attn_values_residual=True,
+            attn_values_residual_conv_kernel=33,
+            attn_dropout=0.0,
+            num_experts=4,
+            k=2,
+            ff_dropout=0.0
     ):
         super().__init__()
 
@@ -339,7 +391,7 @@ class Nystromformer(nn.Module):
                                 dropout=attn_dropout,
                             ),
                         ),
-                        PreNorm(dim, FeedForward(dim=dim, dropout=ff_dropout)),
+                        PreNorm(dim, MoE(input_dim=dim, num_experts=num_experts, k=k)),
                     ]
                 )
             )
@@ -352,30 +404,30 @@ class Nystromformer(nn.Module):
 
 
 def multi_head_attention_forward(
-    query: Tensor,
-    key: Tensor,
-    value: Tensor,
-    embed_dim_to_check: int,
-    num_heads: int,
-    in_proj_weight: Tensor,
-    in_proj_bias: Tensor,
-    bias_k: Optional[Tensor],
-    bias_v: Optional[Tensor],
-    add_zero_attn: bool,
-    dropout_p: float,
-    out_proj_weight: Tensor,
-    out_proj_bias: Tensor,
-    training: bool = True,
-    key_padding_mask: Optional[Tensor] = None,
-    need_weights: bool = True,
-    need_raw: bool = True,
-    attn_mask: Optional[Tensor] = None,
-    use_separate_proj_weight: bool = False,
-    q_proj_weight: Optional[Tensor] = None,
-    k_proj_weight: Optional[Tensor] = None,
-    v_proj_weight: Optional[Tensor] = None,
-    static_k: Optional[Tensor] = None,
-    static_v: Optional[Tensor] = None,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        embed_dim_to_check: int,
+        num_heads: int,
+        in_proj_weight: Tensor,
+        in_proj_bias: Tensor,
+        bias_k: Optional[Tensor],
+        bias_v: Optional[Tensor],
+        add_zero_attn: bool,
+        dropout_p: float,
+        out_proj_weight: Tensor,
+        out_proj_bias: Tensor,
+        training: bool = True,
+        key_padding_mask: Optional[Tensor] = None,
+        need_weights: bool = True,
+        need_raw: bool = True,
+        attn_mask: Optional[Tensor] = None,
+        use_separate_proj_weight: bool = False,
+        q_proj_weight: Optional[Tensor] = None,
+        k_proj_weight: Optional[Tensor] = None,
+        v_proj_weight: Optional[Tensor] = None,
+        static_k: Optional[Tensor] = None,
+        static_v: Optional[Tensor] = None,
 ):
     r"""
     Args:
@@ -541,8 +593,8 @@ def multi_head_attention_forward(
 
         if in_proj_bias is not None:
             q = F.linear(query, q_proj_weight_non_opt, in_proj_bias[0:embed_dim])
-            k = F.linear(key, k_proj_weight_non_opt, in_proj_bias[embed_dim : (embed_dim * 2)])
-            v = F.linear(value, v_proj_weight_non_opt, in_proj_bias[(embed_dim * 2) :])
+            k = F.linear(key, k_proj_weight_non_opt, in_proj_bias[embed_dim: (embed_dim * 2)])
+            v = F.linear(value, v_proj_weight_non_opt, in_proj_bias[(embed_dim * 2):])
         else:
             q = F.linear(query, q_proj_weight_non_opt, in_proj_bias)
             k = F.linear(key, k_proj_weight_non_opt, in_proj_bias)
@@ -551,11 +603,11 @@ def multi_head_attention_forward(
 
     if attn_mask is not None:
         assert (
-            attn_mask.dtype == torch.float32
-            or attn_mask.dtype == torch.float64
-            or attn_mask.dtype == torch.float16
-            or attn_mask.dtype == torch.uint8
-            or attn_mask.dtype == torch.bool
+                attn_mask.dtype == torch.float32
+                or attn_mask.dtype == torch.float64
+                or attn_mask.dtype == torch.float16
+                or attn_mask.dtype == torch.uint8
+                or attn_mask.dtype == torch.bool
         ), "Only float, byte, and bool types are supported for attn_mask, not {}".format(attn_mask.dtype)
         if attn_mask.dtype == torch.uint8:
             warnings.warn("Byte tensor for attn_mask in nn.MultiheadAttention is deprecated. Use bool tensor instead.")
@@ -574,7 +626,8 @@ def multi_head_attention_forward(
 
     # convert ByteTensor key_padding_mask to bool
     if key_padding_mask is not None and key_padding_mask.dtype == torch.uint8:
-        warnings.warn("Byte tensor for key_padding_mask in nn.MultiheadAttention is deprecated. Use bool tensor instead.")
+        warnings.warn(
+            "Byte tensor for key_padding_mask in nn.MultiheadAttention is deprecated. Use bool tensor instead.")
         key_padding_mask = key_padding_mask.to(torch.bool)
 
     if bias_k is not None and bias_v is not None:
@@ -696,7 +749,8 @@ class MultiheadAttention(Module):
     bias_v: Optional[torch.Tensor]
 
     def __init__(
-        self, embed_dim, num_heads, dropout=0.0, bias=True, add_bias_kv=False, add_zero_attn=False, kdim=None, vdim=None
+            self, embed_dim, num_heads, dropout=0.0, bias=True, add_bias_kv=False, add_zero_attn=False, kdim=None,
+            vdim=None
     ):
         super(MultiheadAttention, self).__init__()
         self.embed_dim = embed_dim

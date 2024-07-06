@@ -10,8 +10,63 @@ from .util import SNN_Block
 from .util import MultiheadAttention
 
 
+# ==================================================================================
+
+class FFNExpert(nn.Module):
+    def __init__(self, input_dim, hidden_dim):
+        super(FFNExpert, self).__init__()
+        self.fc1 = nn.Linear(input_dim, hidden_dim)
+        self.bn1 = nn.LayerNorm(hidden_dim)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(hidden_dim, input_dim)
+        self.bn2 = nn.LayerNorm(input_dim)
+
+    def forward(self, x):
+        x = self.relu(self.bn1(self.fc1(x)))
+        x = self.bn2(self.fc2(x))
+        return x
+
+
+class MoE(nn.Module):
+    def __init__(self, input_dim=512, num_experts=4, k=2):
+        super(MoE, self).__init__()
+        self.k = k
+        self.gate = nn.Linear(input_dim, num_experts)
+        self.experts = nn.ModuleList(
+            [FFNExpert(input_dim, input_dim) for _ in range(num_experts)])  # Updated to have input_dim output
+
+    def forward(self, x):
+        # x shape: [B, N, input_dim]
+        B, N, input_dim = x.shape
+
+        # Reshape x to [B*N, input_dim] for processing
+        x_reshaped = x.view(B * N, input_dim)
+        gate_scores = self.gate(x_reshaped)  # [B*N, num_experts]
+        topk_scores, topk_indices = gate_scores.view(B, N, -1).topk(self.k, dim=2)  # [B, N, k]
+
+        # Initialize the output tensor
+        expert_outputs = torch.zeros(B, N, self.k, input_dim,
+                                     device=x.device)  # Ensure output dimensions match input_dim
+
+        # Apply the selected experts to the input
+        for b in range(B):
+            for n in range(N):
+                for i, idx in enumerate(topk_indices[b, n]):
+                    expert_outputs[b, n, i] = self.experts[idx](x[b, n].unsqueeze(0))
+
+        weights = torch.softmax(topk_scores, dim=2).unsqueeze(-1)  # [B, N, k, 1]
+        output = (weights * expert_outputs).sum(dim=2)  # [B, N, input_dim]
+
+        output = output + x
+
+        return output
+
+
+# =========================================================================================
+
+
 class TransLayer(nn.Module):
-    def __init__(self, norm_layer=nn.LayerNorm, dim=512):
+    def __init__(self, norm_layer=nn.LayerNorm, dim=512, num_experts=4, k=2):
         super().__init__()
         self.norm = norm_layer(dim)
         self.attn = NystromAttention(
@@ -19,10 +74,13 @@ class TransLayer(nn.Module):
             dim_head=dim // 8,
             heads=8,
             num_landmarks=dim // 2,  # number of landmarks
-            pinv_iterations=6,  # number of moore-penrose iterations for approximating pinverse. 6 was recommended by the paper
-            residual=True,  # whether to do an extra residual with the value or not. supposedly faster convergence if turned on
+            pinv_iterations=6,
+            # number of moore-penrose iterations for approximating pinverse. 6 was recommended by the paper
+            residual=True,
+            # whether to do an extra residual with the value or not. supposedly faster convergence if turned on
             dropout=0.1,
         )
+        self.moe = MoE(input_dim=dim, num_experts=num_experts, k=k)
 
     def forward(self, x):
         x = x + self.attn(self.norm(x))
@@ -47,7 +105,7 @@ class PPEG(nn.Module):
 
 
 class Transformer_P(nn.Module):
-    def __init__(self, feature_dim=512):
+    def __init__(self, feature_dim=512, num_experts=4, k=2):
         super(Transformer_P, self).__init__()
         # Encoder
         self.pos_layer = PPEG(dim=feature_dim)
@@ -55,6 +113,7 @@ class Transformer_P(nn.Module):
         nn.init.normal_(self.cls_token, std=1e-6)
         self.layer1 = TransLayer(dim=feature_dim)
         self.layer2 = TransLayer(dim=feature_dim)
+
         self.norm = nn.LayerNorm(feature_dim)
         # Decoder
 
@@ -70,38 +129,63 @@ class Transformer_P(nn.Module):
         h = torch.cat((cls_tokens, h), dim=1)
         # ---->Translayer x1
         h = self.layer1(h)  # [B, N, 512]
+        # ---->MoE layer
+        #   h = self.moe(h)  # [B, N, 512]
         # ---->PPEG
         h = self.pos_layer(h, _H, _W)  # [B, N, 512]
         # ---->Translayer x2
         h = self.layer2(h)  # [B, N, 512]
         # ---->cls_token
-        h = self.norm(h)
+        # h = self.norm(h)
         return h[:, 0], h[:, 1:]
 
 
 class Transformer_G(nn.Module):
-    def __init__(self, feature_dim=512):
+    def __init__(self, feature_dim=512, num_experts=4, k=2):
         super(Transformer_G, self).__init__()
         # Encoder
+        self.pos_layer = PPEG(dim=feature_dim)
         self.cls_token = nn.Parameter(torch.randn(1, 1, feature_dim))
         nn.init.normal_(self.cls_token, std=1e-6)
         self.layer1 = TransLayer(dim=feature_dim)
         self.layer2 = TransLayer(dim=feature_dim)
+        self.moe = MoE(input_dim=feature_dim, num_experts=num_experts, k=k)
         self.norm = nn.LayerNorm(feature_dim)
         # Decoder
 
     def forward(self, features):
         # ---->pad
-        cls_tokens = self.cls_token.expand(features.shape[0], -1, -1).cuda()
-        h = torch.cat((cls_tokens, features), dim=1)
+        H = features.shape[1]
+        _H, _W = int(np.ceil(np.sqrt(H))), int(np.ceil(np.sqrt(H)))
+        add_length = _H * _W - H
+        h = torch.cat([features, features[:, :add_length, :]], dim=1)  # [B, N, 512]
+        # ---->cls_token
+        B = h.shape[0]
+        cls_tokens = self.cls_token.expand(B, -1, -1).cuda()
+        h = torch.cat((cls_tokens, h), dim=1)
         # ---->Translayer x1
+        # h = self.moe(h)
+
         h = self.layer1(h)  # [B, N, 512]
+        # ---->MoE layer
+        h = self.moe(h)  # [B, N, 512]
+        # ---->PPEG
+        # h = self.pos_layer(h, _H, _W)  # [B, N, 512]
         # ---->Translayer x2
         h = self.layer2(h)  # [B, N, 512]
         # ---->cls_token
-        h = self.norm(h)
+        # ---->MoE layer
+        h = self.moe(h)  # [B, N, 512]
         return h[:, 0], h[:, 1:]
 
+
+from hypll.manifolds.poincare_ball import Curvature, PoincareBall
+from hypll.tensors import TangentTensor
+from torch import nn
+from hypll import nn as hnn
+
+
+manifold = PoincareBall(c=Curvature(requires_grad=True))
 
 class CMTA(nn.Module):
     def __init__(self, omic_sizes=[100, 200, 300, 400, 500, 600], n_classes=4, fusion="concat", model_size="small"):
@@ -158,6 +242,13 @@ class CMTA(nn.Module):
             )
         elif self.fusion == "bilinear":
             self.mm = BilinearFusion(dim1=hidden[-1], dim2=hidden[-1], scale_dim1=8, scale_dim2=8, mmhid=hidden[-1])
+        elif self.fusion == "concat":
+            self.hyperbolic_mm = nn.Sequential(
+                self.hyperbolic_fc1,
+                self.hyperbolic_relu,
+                self.hyperbolic_fc2,
+                self.hyperbolic_relu
+            )
         else:
             raise NotImplementedError("Fusion [{}] is not implemented".format(self.fusion))
 
@@ -203,7 +294,8 @@ class CMTA(nn.Module):
         # genomics decoder
         cls_token_genomics_decoder, _ = self.genomics_decoder(
             genomics_in_pathomics.transpose(1, 0))  # cls token + patch tokens
-
+        # cls_token_pathomics_decoder, _ = self.genomics_decoder(patch_token_pathomics_encoder )
+        # cls_token_genomics_decoder, _ = self.genomics_decoder(patch_token_genomics_encoder)
         # fusion
         if self.fusion == "concat":
             fusion = self.mm(
@@ -220,9 +312,33 @@ class CMTA(nn.Module):
                 (cls_token_pathomics_encoder + cls_token_pathomics_decoder) / 2,
                 (cls_token_genomics_encoder + cls_token_genomics_decoder) / 2,
             )  # take cls token to make prediction
+        elif self.fusion == "concat":
+            # Step 1: Compute the average of pathomics encoder and decoder cls tokens
+            pathomics_avg = (cls_token_pathomics_encoder.tensor + cls_token_pathomics_decoder.tensor) / 2
+            genomics_avg = (cls_token_genomics_encoder.tensor + cls_token_genomics_decoder.tensor) / 2
+
+            # Step 2: Concatenate the averaged features from pathomics and genomics
+            concatenated_features = torch.cat((pathomics_avg, genomics_avg), dim=1)
+
+            # Step 3: Wrap the concatenated features as a tangent vector on the manifold
+            tangent_features = TangentTensor(data=concatenated_features, man_dim=1, manifold=manifold)
+
+            # Step 4: Map the tangent vector to the manifold using the exponential map
+            hy_features = manifold.expmap(tangent_features)
+
+            # Step 5: Apply hyperbolic matrix multiplication to map features within the hyperbolic space
+            fusion_hy= self.hyperbolic_mm(hy_features)
+
+            # Step 6: Map the fusion tensor back to Euclidean space using the logarithmic map
+            log_mapped_fusion = manifold.logmap(fusion_hy)
+
+            # Step 7: Retrieve the tensor from the log-mapped structure
+            fusion = log_mapped_fusion.tensor
         else:
             raise NotImplementedError("Fusion [{}] is not implemented".format(self.fusion))
-
+        # fusion=( cls_token_genomics_decoder +  cls_token_genomics_encoder) / 2
+        # fusion = (cls_token_pathomics_encoder + cls_token_pathomics_decoder) / 2
+        # predict
         # predict
         logits = self.classifier(fusion)  # [1, n_classes]
         hazards = torch.sigmoid(logits)

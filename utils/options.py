@@ -56,7 +56,6 @@ def parse_args():
         help="Modality fuison strategy",
     )
     parser.add_argument("--alpha", type=float, default=0.5, help="hyper-parameter of loss function")
-
     # Optimizer Parameters + Survival Loss Function
     parser.add_argument("--optimizer", type=str, choices=["SGD", "Adam",
                         "AdamW", "RAdam", "PlainRAdam", "Lookahead"], default="Adam")
@@ -71,6 +70,7 @@ def parse_args():
         default="nll_surv",
         help="slide-level classification loss function (default: ce)",
     )
+
     parser.add_argument("--weighted_sample", action="store_true", default=True, help="Enable weighted sampling")
     args = parser.parse_args()
     return args

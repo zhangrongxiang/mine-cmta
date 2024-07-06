@@ -63,6 +63,7 @@ class Engine(object):
             print('>')
         return self.best_score, self.best_epoch
 
+from hypll.optim import RiemannianAdam
     def train(self, data_loader, model, criterion, optimizer):
         model.train()
         train_loss = 0.0
@@ -98,9 +99,21 @@ class Engine(object):
             all_event_times[batch_idx] = event_time
             train_loss += loss.item()
 
+            # =======================================
+            euclidean_params = [p for name, p in model.named_parameters() if 'hyperbolic' not in name]
+            hyperbolic_params = [p for name, p in model.named_parameters() if 'hyperbolic' in name]
+            #
+            # # 定义优化器
+            optimizer_euclidean = torch.optim.Adam(euclidean_params, lr=0.001)
+            optimizer_hyperbolic = RiemannianAdam(hyperbolic_params, lr=0.001)
+            # =======================================
             loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
+
+            optimizer_euclidean.step()
+            optimizer_hyperbolic.step()
+
+            optimizer_hyperbolic.zero_grad()
+            optimizer_euclidean.zero_grad()
         # calculate loss and error for epoch
         train_loss /= len(dataloader)
         c_index = concordance_index_censored((1-all_censorships).astype(bool),
