@@ -283,12 +283,12 @@ class Generic_MIL_Survival_Dataset(Generic_WSI_Survival_Dataset):
                         if path_features.size(0) > self.OOM:
                             path_features = path_features[np.random.choice(path_features.size(0), self.OOM, replace=False)]
 
-                    omic1 = torch.tensor(self.genomic_features[self.omic_names[0]].iloc[idx])
-                    omic2 = torch.tensor(self.genomic_features[self.omic_names[1]].iloc[idx])
-                    omic3 = torch.tensor(self.genomic_features[self.omic_names[2]].iloc[idx])
-                    omic4 = torch.tensor(self.genomic_features[self.omic_names[3]].iloc[idx])
-                    omic5 = torch.tensor(self.genomic_features[self.omic_names[4]].iloc[idx])
-                    omic6 = torch.tensor(self.genomic_features[self.omic_names[5]].iloc[idx])
+                    omic1 = torch.tensor(self.genomic_features[self.omic_names[0]].iloc[idx].values)
+                    omic2 = torch.tensor(self.genomic_features[self.omic_names[1]].iloc[idx].values)
+                    omic3 = torch.tensor(self.genomic_features[self.omic_names[2]].iloc[idx].values)
+                    omic4 = torch.tensor(self.genomic_features[self.omic_names[3]].iloc[idx].values)
+                    omic5 = torch.tensor(self.genomic_features[self.omic_names[4]].iloc[idx].values)
+                    omic6 = torch.tensor(self.genomic_features[self.omic_names[5]].iloc[idx].values)
 
                     return (path_features, omic1, omic2, omic3, omic4, omic5, omic6, label, event_time, c)
 
@@ -299,7 +299,7 @@ class Generic_MIL_Survival_Dataset(Generic_WSI_Survival_Dataset):
 
 
 class Generic_Split(Generic_MIL_Survival_Dataset):
-    def __init__(self, slide_data, metadata, modal, signatures=None, data_dir=None, label_col=None, patient_dict=None, num_classes=2):
+    def __init__(self, slide_data, metadata, modal, signatures=None, data_dir=None, label_col=None, patient_dict=None, num_classes=2,OOM=1024):
         self.use_h5 = False
         self.slide_data = slide_data
         self.metadata = metadata
@@ -309,6 +309,7 @@ class Generic_Split(Generic_MIL_Survival_Dataset):
         self.label_col = label_col
         self.patient_dict = patient_dict
         self.slide_cls_ids = [[] for i in range(self.num_classes)]
+        self.OOM=OOM
 
         for i in range(self.num_classes):
             self.slide_cls_ids[i] = np.where(self.slide_data['label'] == i)[0]

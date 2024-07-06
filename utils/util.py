@@ -8,18 +8,18 @@ from torch.utils.data import DataLoader, Sampler, WeightedRandomSampler, RandomS
 def collate_MIL_survival(batch):
     img = torch.cat([item[0] for item in batch], dim = 0)
     omic = torch.cat([item[1] for item in batch], dim = 0).type(torch.FloatTensor)
-    label = torch.LongTensor([item[2] for item in batch])
+    label = torch.LongTensor([int(item[2]) for item in batch])
     event_time = np.array([item[3] for item in batch])
-    c = torch.FloatTensor([item[4] for item in batch])
+    c = torch.FloatTensor([int(item[4]) for item in batch])
     return [img, omic, label, event_time, c]
 
 def collate_MIL_survival_cluster(batch):
     img = torch.cat([item[0] for item in batch], dim = 0)
     cluster_ids = torch.cat([item[1] for item in batch], dim = 0).type(torch.LongTensor)
     omic = torch.cat([item[2] for item in batch], dim = 0).type(torch.FloatTensor)
-    label = torch.LongTensor([item[3] for item in batch])
+    label = torch.LongTensor([int(item[3]) for item in batch])
     event_time = np.array([item[4] for item in batch])
-    c = torch.FloatTensor([item[5] for item in batch])
+    c = torch.FloatTensor([int(item[5]) for item in batch])
     return [img, cluster_ids, omic, label, event_time, c]
 
 def collate_MIL_survival_sig(batch):
@@ -31,9 +31,9 @@ def collate_MIL_survival_sig(batch):
     omic5 = torch.cat([item[5] for item in batch], dim = 0).type(torch.FloatTensor)
     omic6 = torch.cat([item[6] for item in batch], dim = 0).type(torch.FloatTensor)
 
-    label = torch.LongTensor([item[7] for item in batch])
+    label = torch.LongTensor([int(item[7]) for item in batch])
     event_time = np.array([item[8] for item in batch])
-    c = torch.FloatTensor([item[9] for item in batch])
+    c = torch.FloatTensor([int(item[9]) for item in batch])
     return [img, omic1, omic2, omic3, omic4, omic5, omic6, label, event_time, c]
 
 def make_weights_for_balanced_classes_split(dataset):
