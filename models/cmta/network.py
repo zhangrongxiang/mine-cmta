@@ -242,7 +242,7 @@ class CMTA(nn.Module):
             )
         elif self.fusion == "bilinear":
             self.mm = BilinearFusion(dim1=hidden[-1], dim2=hidden[-1], scale_dim1=8, scale_dim2=8, mmhid=hidden[-1])
-        elif self.fusion == "concat":
+        elif self.fusion == "hyperbolic":
             self.hyperbolic_mm = nn.Sequential(
                 self.hyperbolic_fc1,
                 self.hyperbolic_relu,
@@ -312,8 +312,9 @@ class CMTA(nn.Module):
                 (cls_token_pathomics_encoder + cls_token_pathomics_decoder) / 2,
                 (cls_token_genomics_encoder + cls_token_genomics_decoder) / 2,
             )  # take cls token to make prediction
-        elif self.fusion == "concat":
+        elif self.fusion == "hyperbolic":
             # Step 1: Compute the average of pathomics encoder and decoder cls tokens
+            print("hyperbolic")
             pathomics_avg = (cls_token_pathomics_encoder.tensor + cls_token_pathomics_decoder.tensor) / 2
             genomics_avg = (cls_token_genomics_encoder.tensor + cls_token_genomics_decoder.tensor) / 2
 
