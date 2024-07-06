@@ -319,7 +319,7 @@ class CMTA(nn.Module):
             )  # take cls token to make prediction
         elif self.fusion == "hyperbolic":
             # Step 1: Compute the average of pathomics encoder and decoder cls tokens
-            print("hyperbolic")
+            # print("hyperbolic")
             pathomics_avg = (cls_token_pathomics_encoder + cls_token_pathomics_decoder) / 2
             genomics_avg = (cls_token_genomics_encoder + cls_token_genomics_decoder) / 2
 
