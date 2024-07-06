@@ -235,6 +235,11 @@ class CMTA(nn.Module):
         # Decoder
         self.genomics_decoder = Transformer_G(feature_dim=hidden[-1])
 
+        self.hyperbolic_fc1 = hnn.HLinear(in_features=hidden[-1] * 2, out_features=hidden[-1], manifold=manifold)
+        self.hyperbolic_fc2 = hnn.HLinear(in_features=hidden[-1], out_features=hidden[-1], manifold=manifold)
+        self.hyperbolic_relu = hnn.HReLU(manifold=manifold)
+
+
         # Classification Layer
         if self.fusion == "concat":
             self.mm = nn.Sequential(
