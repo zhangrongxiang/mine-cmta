@@ -252,7 +252,8 @@ class CMTA(nn.Module):
                 self.hyperbolic_fc1,
                 self.hyperbolic_relu,
                 self.hyperbolic_fc2,
-                self.hyperbolic_relu
+                self.hyperbolic_relu,
+                self.hyperbolic_fc2
             )
         else:
             raise NotImplementedError("Fusion [{}] is not implemented".format(self.fusion))
