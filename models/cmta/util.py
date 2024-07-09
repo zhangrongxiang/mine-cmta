@@ -391,7 +391,7 @@ class Nystromformer(nn.Module):
                                 dropout=attn_dropout,
                             ),
                         ),
-                        PreNorm(dim, FeedForward(dim=dim, dropout=ff_dropout)),
+                        PreNorm(dim, MoE(input_dim=dim, num_experts=num_experts, k=k)),
                     ]
                 )
             )

@@ -168,14 +168,14 @@ class Transformer_G(nn.Module):
 
         h = self.layer1(h)  # [B, N, 512]
         # ---->MoE layer
-        # h = self.moe(h)  # [B, N, 512]
+        h = self.moe(h)  # [B, N, 512]
         # ---->PPEG
         # h = self.pos_layer(h, _H, _W)  # [B, N, 512]
         # ---->Translayer x2
         h = self.layer2(h)  # [B, N, 512]
         # ---->cls_token
         # ---->MoE layer
-        # h = self.moe(h)  # [B, N, 512]
+        h = self.moe(h)  # [B, N, 512]
         return h[:, 0], h[:, 1:]
 
 
