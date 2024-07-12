@@ -318,7 +318,7 @@ class CMTA(nn.Module):
                     dim=1,
                 )
             )  # take cls token to make prediction
-        elif self.fusion == "fine-coarse":
+        elif self.fusion == "fineCoarse":
             fusion_coarse = self.mm(
                 cls_token_pathomics_encoder,
                 cls_token_genomics_encoder ,
