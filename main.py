@@ -48,6 +48,10 @@ def main(args):
     best_epoch = ["best epoch"]
     best_score = ["best cindex"]
 
+    print("=======================================")
+    print("所有参数：", vars(args))
+    print("=======================================")
+
     # start 5-fold CV evaluation.
     for fold in range(5):
         # build dataset
@@ -130,8 +134,5 @@ def main(args):
 
 if __name__ == "__main__":
     args = parse_args()
-    print("=======================================")
-    print("所有参数：", vars(args))
-    print("=======================================")
     results = main(args)
     print("finished!")
