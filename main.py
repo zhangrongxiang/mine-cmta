@@ -40,7 +40,7 @@ def main(args):
     )
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
-    log_file = os.path.join(args.save_path, '___logging.txt')
+    log_file = os.path.join(results_dir, '___logging.txt')
     log_file_handle = open(log_file, 'w')
     sys.stdout = FlushFile(log_file_handle)
     # 5-fold cross validation

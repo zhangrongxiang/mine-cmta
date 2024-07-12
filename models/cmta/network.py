@@ -304,6 +304,10 @@ class CMTA(nn.Module):
         # cls_token_pathomics_decoder, _ = self.genomics_decoder(patch_token_pathomics_encoder )
         # cls_token_genomics_decoder, _ = self.genomics_decoder(patch_token_genomics_encoder)
         # fusion
+        print("cls_token_pathomics_encoder", cls_token_pathomics_encoder.shape)
+        print("cls_token_genomics_encoder", cls_token_genomics_encoder.shape)
+        print("cls_token_pathomics_decoder", cls_token_pathomics_decoder.shape)
+        print("cls_token_genomics_decoder", cls_token_genomics_decoder.shape)
         if self.fusion == "concat":
             fusion = self.mm(
                 torch.concat(
