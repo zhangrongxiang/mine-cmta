@@ -1,4 +1,5 @@
 import os
+import sys
 
 import csv
 import time
@@ -11,6 +12,18 @@ from utils.util import get_split_loader, set_seed
 from utils.loss import define_loss
 from utils.optimizer import define_optimizer
 from utils.scheduler import define_scheduler
+
+
+class FlushFile:
+    def __init__(self, f):
+        self.f = f
+
+    def write(self, x):
+        self.f.write(x)
+        self.f.flush()
+
+    def flush(self):
+        self.f.flush()
 
 
 def main(args):
@@ -27,7 +40,9 @@ def main(args):
     )
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
-
+    log_file = os.path.join(args.save_path, '___logging.txt')
+    log_file_handle = open(log_file, 'w')
+    sys.stdout = FlushFile(log_file_handle)
     # 5-fold cross validation
     header = ["folds", "fold 0", "fold 1", "fold 2", "fold 3", "fold 4", "mean", "std"]
     best_epoch = ["best epoch"]
@@ -77,6 +92,8 @@ def main(args):
                 "n_classes": 4,
                 "fusion": args.fusion,
                 "model_size": args.model_size,
+                "alpha": args.F_alpha,
+                "beta":args.F_beta,
             }
             model = CMTA(**model_dict)
             criterion = define_loss(args)

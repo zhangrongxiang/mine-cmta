@@ -188,13 +188,14 @@ from hypll import nn as hnn
 manifold = PoincareBall(c=Curvature(requires_grad=True))
 
 class CMTA(nn.Module):
-    def __init__(self, omic_sizes=[100, 200, 300, 400, 500, 600], n_classes=4, fusion="concat", model_size="small"):
+    def __init__(self, omic_sizes=[100, 200, 300, 400, 500, 600], n_classes=4, fusion="concat", model_size="small",alpha=0.5,beta=0.5):
         super(CMTA, self).__init__()
 
         self.omic_sizes = omic_sizes
         self.n_classes = n_classes
         self.fusion = fusion
-
+        self.alpha=alpha
+        self.beta=beta
         ###
         self.size_dict = {
             "pathomics": {"small": [1024, 256, 256], "large": [1024, 512, 256]},
@@ -307,12 +308,22 @@ class CMTA(nn.Module):
             fusion = self.mm(
                 torch.concat(
                     (
-                        (cls_token_pathomics_encoder + cls_token_pathomics_decoder) / 2,
-                        (cls_token_genomics_encoder + cls_token_genomics_decoder) / 2,
+                        (1-self.alpha) *(cls_token_pathomics_encoder + cls_token_pathomics_decoder) / 2,
+                        self.alpha *(cls_token_genomics_encoder + cls_token_genomics_decoder) / 2,
                     ),
                     dim=1,
                 )
             )  # take cls token to make prediction
+        elif self.fusion == "fine-coarse":
+            fusion_coarse = self.mm(
+                cls_token_pathomics_encoder,
+                cls_token_genomics_encoder ,
+            )  # take cls token to make prediction
+            fusion_fine = self.mm(
+                cls_token_pathomics_decoder,
+                cls_token_genomics_decoder,
+            )
+            fusion=self.beta * fusion_fine + (1-self.beta) * fusion_coarse
         elif self.fusion == "bilinear":
             fusion = self.mm(
                 (cls_token_pathomics_encoder + cls_token_pathomics_decoder) / 2,
