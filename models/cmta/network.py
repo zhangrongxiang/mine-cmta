@@ -246,6 +246,10 @@ class CMTA(nn.Module):
             self.mm = nn.Sequential(
                 *[nn.Linear(hidden[-1] * 2, hidden[-1]), nn.ReLU(), nn.Linear(hidden[-1], hidden[-1]), nn.ReLU()]
             )
+        elif self.fusion == "fineCoarse":
+            self.mm = nn.Sequential(
+                *[nn.Linear(hidden[-1] * 2, hidden[-1]), nn.ReLU(), nn.Linear(hidden[-1], hidden[-1]), nn.ReLU()]
+            )
         elif self.fusion == "bilinear":
             self.mm = BilinearFusion(dim1=hidden[-1], dim2=hidden[-1], scale_dim1=8, scale_dim2=8, mmhid=hidden[-1])
         elif self.fusion == "hyperbolic":
@@ -320,12 +324,22 @@ class CMTA(nn.Module):
             )  # take cls token to make prediction
         elif self.fusion == "fineCoarse":
             fusion_coarse = self.mm(
-                cls_token_pathomics_encoder,
-                cls_token_genomics_encoder ,
-            )  # take cls token to make prediction
+                torch.concat(
+                    (
+                        cls_token_pathomics_encoder,
+                        cls_token_genomics_encoder,
+                    ),
+                    dim=1
+                )
+            )
             fusion_fine = self.mm(
-                cls_token_pathomics_decoder,
-                cls_token_genomics_decoder,
+                torch.concat(
+                    (
+                        cls_token_pathomics_decoder,
+                        cls_token_genomics_decoder,
+                    ),
+                    dim=1
+                )
             )
             fusion=self.beta * fusion_fine + (1-self.beta) * fusion_coarse
         elif self.fusion == "bilinear":
