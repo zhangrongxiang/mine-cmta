@@ -53,7 +53,7 @@ def parse_args():
     parser.add_argument(
         "--fusion",
         type=str,
-        choices=["concat", "bilinear","hyperbolic","fineCoarse"],
+        choices=["concat", "bilinear","hyperbolic","fineCoarse","Mamba"],
         default="concat",
         help="Modality fuison strategy",
     )
