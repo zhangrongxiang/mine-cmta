@@ -313,8 +313,8 @@ class CMTA(nn.Module):
         genomics_features = torch.stack(genomics_features).unsqueeze(0)  # [1, 6, 1024]
         # pathomics embedding
         pathomics_features = self.pathomics_fc(x_path).unsqueeze(0)
-        print("genomics_features.shape: ",genomics_features.shape)
-        print("pathomics_features.shape:",pathomics_features.shape)
+        # print("genomics_features.shape: ",genomics_features.shape)
+        # print("pathomics_features.shape:",pathomics_features.shape)
         # encoder
         # pathomics encoder
         cls_token_pathomics_encoder, patch_token_pathomics_encoder = self.pathomics_encoder(
@@ -323,10 +323,10 @@ class CMTA(nn.Module):
         cls_token_genomics_encoder, patch_token_genomics_encoder = self.genomics_encoder(
             genomics_features)  # cls token + patch tokens
 
-        print("cls_token_pathomics_encoder.shape: ",cls_token_pathomics_encoder.shape)
-        print("cls_token_genomics_encoder.shape: ",cls_token_genomics_encoder.shape)
-        print("patch_token_pathomics_encoder.shape: ",patch_token_pathomics_encoder.shape)
-        print("patch_token_genomics_encoder.shape: ",patch_token_genomics_encoder.shape)
+        # print("cls_token_pathomics_encoder.shape: ",cls_token_pathomics_encoder.shape)
+        # print("cls_token_genomics_encoder.shape: ",cls_token_genomics_encoder.shape)
+        # print("patch_token_pathomics_encoder.shape: ",patch_token_pathomics_encoder.shape)
+        # print("patch_token_genomics_encoder.shape: ",patch_token_genomics_encoder.shape)
         # cross-omics attention
 
         #=============== token selection;
@@ -340,10 +340,10 @@ class CMTA(nn.Module):
             patch_token_genomics_encoder=self.token_selection(patch_token_genomics_encoder, cls_token_genomics_encoder)
 
         # =============== token selection;
-        print("===========")
-        print("patch_token_pathomics_encoder.shape: ", patch_token_pathomics_encoder.shape)
-        print("patch_token_genomics_encoder.shape: ", patch_token_genomics_encoder.shape)
-        print("===========")
+        # print("===========")
+        # print("patch_token_pathomics_encoder.shape: ", patch_token_pathomics_encoder.shape)
+        # print("patch_token_genomics_encoder.shape: ", patch_token_genomics_encoder.shape)
+        # print("===========")
         pathomics_in_genomics, Att = self.P_in_G_Att(
             patch_token_pathomics_encoder.transpose(1, 0),
             patch_token_genomics_encoder.transpose(1, 0),
@@ -355,8 +355,8 @@ class CMTA(nn.Module):
             patch_token_pathomics_encoder.transpose(1, 0),
         )  # ([7, 1, 256])
         # decoder
-        print(" pathomics_in_genomics: " ,pathomics_in_genomics.shape)
-        print(" genomics_in_pathomics: " ,genomics_in_pathomics.shape)
+        # print(" pathomics_in_genomics: " ,pathomics_in_genomics.shape)
+        # print(" genomics_in_pathomics: " ,genomics_in_pathomics.shape)
 
 
         # pathomics decoder
@@ -370,8 +370,8 @@ class CMTA(nn.Module):
         # fusion
         # print("cls_token_pathomics_encoder", cls_token_pathomics_encoder.shape)
         # print("cls_token_genomics_encoder", cls_token_genomics_encoder.shape)
-        print("cls_token_pathomics_decoder", cls_token_pathomics_decoder.shape)
-        print("cls_token_genomics_decoder", cls_token_genomics_decoder.shape)
+        # print("cls_token_pathomics_decoder", cls_token_pathomics_decoder.shape)
+        # print("cls_token_genomics_decoder", cls_token_genomics_decoder.shape)
         if self.fusion == "concat":
             fusion = self.mm(
                 torch.concat(
