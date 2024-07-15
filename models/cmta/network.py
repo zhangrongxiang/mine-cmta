@@ -213,7 +213,7 @@ from hypll import nn as hnn
 manifold = PoincareBall(c=Curvature(requires_grad=True))
 
 class CMTA(nn.Module):
-    def __init__(self, omic_sizes=[100, 200, 300, 400, 500, 600], n_classes=4, fusion="concat", model_size="small",alpha=0.5,beta=0.5):
+    def __init__(self, omic_sizes=[100, 200, 300, 400, 500, 600], n_classes=4, fusion="concat", model_size="small",alpha=0.5,beta=0.5,tokenS="both"):
         super(CMTA, self).__init__()
 
         self.omic_sizes = omic_sizes
@@ -221,6 +221,7 @@ class CMTA(nn.Module):
         self.fusion = fusion
         self.alpha=alpha
         self.beta=beta
+        self.tokenS=tokenS
         ###
         self.size_dict = {
             "pathomics": {"small": [1024, 256, 256], "large": [1024, 512, 256]},
@@ -327,8 +328,18 @@ class CMTA(nn.Module):
         print("patch_token_pathomics_encoder.shape: ",patch_token_pathomics_encoder.shape)
         print("patch_token_genomics_encoder.shape: ",patch_token_genomics_encoder.shape)
         # cross-omics attention
-        patch_token_pathomics_encoder=self.token_selection(patch_token_pathomics_encoder, cls_token_pathomics_encoder)
-        patch_token_genomics_encoder=self.token_selection(patch_token_genomics_encoder, cls_token_genomics_encoder)
+
+        #=============== token selection;
+
+        if self.tokenS=="both":
+            patch_token_pathomics_encoder=self.token_selection(patch_token_pathomics_encoder, cls_token_pathomics_encoder)
+            patch_token_genomics_encoder=self.token_selection(patch_token_genomics_encoder, cls_token_genomics_encoder)
+        elif self.tokenS=="P":
+            patch_token_pathomics_encoder=self.token_selection(patch_token_pathomics_encoder, cls_token_pathomics_encoder)
+        elif self.tokenS=="G":
+            patch_token_genomics_encoder=self.token_selection(patch_token_genomics_encoder, cls_token_genomics_encoder)
+
+        # =============== token selection;
         print("===========")
         print("patch_token_pathomics_encoder.shape: ", patch_token_pathomics_encoder.shape)
         print("patch_token_genomics_encoder.shape: ", patch_token_genomics_encoder.shape)

@@ -62,10 +62,12 @@ def parse_args():
     parser.add_argument("--optimizer", type=str, choices=["SGD", "Adam",
                         "AdamW", "RAdam", "PlainRAdam", "Lookahead"], default="Adam")
     parser.add_argument("--scheduler", type=str, choices=["None", "exp", "step", "plateau", "cosine"], default="cosine")
+    parser.add_argument("--tokenS", type=str, choices=["both", "G", "P"], default="both")
     parser.add_argument("--num_epoch", type=int, default=20, help="Maximum number of epochs to train (default: 20)")
     parser.add_argument("--batch_size", type=int, default=1, help="Batch Size (Default: 1, due to varying bag sizes)")
     parser.add_argument("--lr", type=float, default=2e-4, help="Learning rate (default: 0.0001)")
     parser.add_argument("--weight_decay", type=float, default=1e-5, help="Weight decay")
+
     parser.add_argument(
         "--loss",
         type=str,
