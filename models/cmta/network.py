@@ -2,7 +2,7 @@ import numpy as np
 
 import torch
 import torch.nn as nn
-
+import math
 from .util import initialize_weights
 from .util import NystromAttention
 from .util import BilinearFusion
@@ -181,6 +181,29 @@ class Transformer_G(nn.Module):
         return h[:, 0], h[:, 1:]
 
 
+class token_selection(nn.Module):
+    def __init__(self):
+        super(token_selection, self).__init__()
+        self.MLP_f = nn.Linear(256, 128)
+        self.MLP_s= nn.Linear(256, 256)
+        self.softmax = nn.Softmax(dim=1)
+        self.relu = nn.ReLU()
+
+    def forward(self, start_patch_token, cls_token):
+        half_token_patch = self.MLP_f(start_patch_token)
+        half_token_cls = self.MLP_f(cls_token)
+        half_token_cls = half_token_cls.unsqueeze(1)
+        half_token_cls = half_token_cls.repeat(1, start_patch_token.size(1), 1)  # Corrected this line
+        patch_token = torch.cat([half_token_cls, half_token_patch], dim=2)
+        patch_token = self.MLP_s(patch_token)
+        _patch_token = self.softmax(patch_token)
+        topk_values, topk_indices = torch.topk(_patch_token, math.ceil(start_patch_token.size(1)/2), dim=1)
+        final_token = torch.gather(start_patch_token, 1, topk_indices.squeeze(1))  # Squeeze the last dimension here
+
+        return final_token
+
+
+
 from hypll.manifolds.poincare_ball import Curvature, PoincareBall
 from hypll.tensors import TangentTensor
 from torch import nn
@@ -241,10 +264,11 @@ class CMTA(nn.Module):
         self.hyperbolic_fc1 = hnn.HLinear(in_features=hidden[-1] * 2, out_features=hidden[-1], manifold=manifold)
         self.hyperbolic_fc2 = hnn.HLinear(in_features=hidden[-1], out_features=hidden[-1], manifold=manifold)
         self.hyperbolic_relu = hnn.HReLU(manifold=manifold)
+        self.token_selection = token_selection()
 
 
         # Classification Layer
-        if self.fusion == "concat":
+        if self.fusion == "Aconcat" or self.fusion == "concat":
             self.mm = nn.Sequential(
                 *[nn.Linear(hidden[-1] * 2, hidden[-1]), nn.ReLU(), nn.Linear(hidden[-1], hidden[-1]), nn.ReLU()]
             )
@@ -303,6 +327,12 @@ class CMTA(nn.Module):
         print("patch_token_pathomics_encoder.shape: ",patch_token_pathomics_encoder.shape)
         print("patch_token_genomics_encoder.shape: ",patch_token_genomics_encoder.shape)
         # cross-omics attention
+        patch_token_pathomics_encoder=self.token_selection(patch_token_pathomics_encoder, cls_token_pathomics_encoder)
+        patch_token_genomics_encoder=self.token_selection(patch_token_genomics_encoder, cls_token_genomics_encoder)
+        print("===========")
+        print("patch_token_pathomics_encoder.shape: ", patch_token_pathomics_encoder.shape)
+        print("patch_token_genomics_encoder.shape: ", patch_token_genomics_encoder.shape)
+        print("===========")
         pathomics_in_genomics, Att = self.P_in_G_Att(
             patch_token_pathomics_encoder.transpose(1, 0),
             patch_token_genomics_encoder.transpose(1, 0),
@@ -335,12 +365,22 @@ class CMTA(nn.Module):
             fusion = self.mm(
                 torch.concat(
                     (
-                        (1-self.alpha) *(cls_token_pathomics_encoder + cls_token_pathomics_decoder) / 2,
-                        self.alpha *(cls_token_genomics_encoder + cls_token_genomics_decoder) / 2,
+                        (cls_token_pathomics_encoder + cls_token_pathomics_decoder) / 2,
+                        (cls_token_genomics_encoder + cls_token_genomics_decoder) / 2,
                     ),
                     dim=1,
                 )
             )  # take cls token to make prediction
+        elif self.fusion == "Aconcat":
+            fusion = self.mm(
+                torch.concat(
+                    (
+                        (1 - self.alpha) * (cls_token_pathomics_encoder + cls_token_pathomics_decoder) / 2,
+                        self.alpha * (cls_token_genomics_encoder + cls_token_genomics_decoder) / 2,
+                    ),
+                    dim=1,
+                )
+            )  #
         elif self.fusion == "fineCoarse":
             fusion_coarse = self.mm(
                 torch.concat(
