@@ -137,6 +137,7 @@ class Transformer_P(nn.Module):
         h = self.layer2(h)  # [B, N, 512]
         # ---->cls_token
         # h = self.norm(h)
+        print("P: ",h.shape)
         return h[:, 0], h[:, 1:]
 
 
@@ -176,6 +177,7 @@ class Transformer_G(nn.Module):
         # ---->cls_token
         # ---->MoE layer
         h = self.moe(h)  # [B, N, 512]
+        print("G:",h.shape)
         return h[:, 0], h[:, 1:]
 
 
