@@ -137,7 +137,7 @@ class Transformer_P(nn.Module):
         h = self.layer2(h)  # [B, N, 512]
         # ---->cls_token
         # h = self.norm(h)
-        print("P: ",h.shape)
+
         return h[:, 0], h[:, 1:]
 
 
@@ -177,7 +177,7 @@ class Transformer_G(nn.Module):
         # ---->cls_token
         # ---->MoE layer
         h = self.moe(h)  # [B, N, 512]
-        print("G:",h.shape)
+
         return h[:, 0], h[:, 1:]
 
 
@@ -188,14 +188,17 @@ class token_selection(nn.Module):
         self.MLP_s= nn.Linear(256, 256)
         self.softmax = nn.Softmax(dim=1)
         self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(0.25)
 
     def forward(self, start_patch_token, cls_token):
         half_token_patch = self.MLP_f(start_patch_token)
+        half_token_patch = self.dropout(half_token_patch)
         half_token_cls = self.MLP_f(cls_token)
         half_token_cls = half_token_cls.unsqueeze(1)
         half_token_cls = half_token_cls.repeat(1, start_patch_token.size(1), 1)  # Corrected this line
         patch_token = torch.cat([half_token_cls, half_token_patch], dim=2)
         patch_token = self.MLP_s(patch_token)
+        patch_token = self.dropout(patch_token)
         _patch_token = self.softmax(patch_token)
         topk_values, topk_indices = torch.topk(_patch_token, math.ceil(start_patch_token.size(1)/2), dim=1)
         final_token = torch.gather(start_patch_token, 1, topk_indices.squeeze(1))  # Squeeze the last dimension here
