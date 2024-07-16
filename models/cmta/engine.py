@@ -109,16 +109,20 @@ class Engine(object):
             hyperbolic_params = [p for name, p in model.named_parameters() if 'hyperbolic' in name]
             #
             # # 定义优化器
-            optimizer_euclidean = torch.optim.Adam(euclidean_params, lr=0.001)
+            optimizer_euclidean = torch.optim.SGD(filter(lambda p: p.requires_grad, euclidean_params), lr=self.args.lr, momentum=0.9, weight_decay=self.args.weight_decay)
             optimizer_hyperbolic = RiemannianAdam(hyperbolic_params, lr=0.001)
             # =======================================
             loss.backward()
 
             optimizer_euclidean.step()
-            optimizer_hyperbolic.step()
-
-            optimizer_hyperbolic.zero_grad()
             optimizer_euclidean.zero_grad()
+
+            optimizer_hyperbolic.step()
+            optimizer_hyperbolic.zero_grad()
+            # loss.backward()
+            # optimizer.step()
+            # optimizer.zero_grad()
+
         # calculate loss and error for epoch
         train_loss /= len(dataloader)
         c_index = concordance_index_censored((1 - all_censorships).astype(bool),
