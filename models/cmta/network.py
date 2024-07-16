@@ -341,6 +341,8 @@ class CMTA(nn.Module):
             patch_token_pathomics_encoder=self.token_selection(patch_token_pathomics_encoder, cls_token_pathomics_encoder)
         elif self.tokenS=="G":
             patch_token_genomics_encoder=self.token_selection(patch_token_genomics_encoder, cls_token_genomics_encoder)
+        elif self.tokenS=="N":
+            pass
 
         # =============== token selection;
         # print("===========")

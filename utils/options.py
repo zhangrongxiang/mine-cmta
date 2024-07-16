@@ -8,7 +8,7 @@ def parse_args():
     parser.add_argument(
         "--data_root_dir", type=str, default="path/to/data_root_dir", help="Data directory to WSI features (extracted via CLAM"
     )
-    parser.add_argument("--seed", type=int, default=1, help="Random seed for reproducible experiment (default: 1)")
+    parser.add_argument("--seed", type=int, default=3407, help="Random seed for reproducible experiment (default: 1)")
     parser.add_argument("--F_alpha", type=float, default=0.5, help="The proportion of genes involved in fusion")
     parser.add_argument("--F_beta", type=float, default=0.5, help="The proportion of fine particle size in multi-particle size fusion")
     parser.add_argument(
@@ -62,7 +62,7 @@ def parse_args():
     parser.add_argument("--optimizer", type=str, choices=["SGD", "Adam",
                         "AdamW", "RAdam", "PlainRAdam", "Lookahead"], default="Adam")
     parser.add_argument("--scheduler", type=str, choices=["None", "exp", "step", "plateau", "cosine"], default="cosine")
-    parser.add_argument("--tokenS", type=str, choices=["both", "G", "P"], default="both")
+    parser.add_argument("--tokenS", type=str, choices=["both", "G", "P","N"], default="both")
     parser.add_argument("--num_epoch", type=int, default=20, help="Maximum number of epochs to train (default: 20)")
     parser.add_argument("--batch_size", type=int, default=1, help="Batch Size (Default: 1, due to varying bag sizes)")
     parser.add_argument("--lr", type=float, default=2e-4, help="Learning rate (default: 0.0001)")
