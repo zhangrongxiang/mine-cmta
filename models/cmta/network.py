@@ -190,7 +190,7 @@ class token_selection(nn.Module):
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(0.25)
 
-    def forward(self, start_patch_token, cls_token):
+    def forward(self, start_patch_token, cls_token,Temperature):
         half_token_patch = self.MLP_f(start_patch_token)
         half_token_patch = self.dropout(half_token_patch)
         half_token_cls = self.MLP_f(cls_token)
@@ -200,7 +200,7 @@ class token_selection(nn.Module):
         patch_token = self.MLP_s(patch_token)
         patch_token = self.dropout(patch_token)
         _patch_token = self.softmax(patch_token)
-        topk_values, topk_indices = torch.topk(_patch_token, math.ceil(start_patch_token.size(1)/2), dim=1)
+        topk_values, topk_indices = torch.topk(_patch_token, math.ceil(start_patch_token.size(1)*Temperature), dim=1)
         final_token = torch.gather(start_patch_token, 1, topk_indices.squeeze(1))  # Squeeze the last dimension here
 
         return final_token
@@ -216,7 +216,7 @@ from hypll import nn as hnn
 manifold = PoincareBall(c=Curvature(requires_grad=True))
 
 class CMTA(nn.Module):
-    def __init__(self, omic_sizes=[100, 200, 300, 400, 500, 600], n_classes=4, fusion="concat", model_size="small",alpha=0.5,beta=0.5,tokenS="both"):
+    def __init__(self, omic_sizes=[100, 200, 300, 400, 500, 600], n_classes=4, fusion="concat", model_size="small",alpha=0.5,beta=0.5,tokenS="both",GT=0.5,PT=0.5):
         super(CMTA, self).__init__()
 
         self.omic_sizes = omic_sizes
@@ -225,6 +225,8 @@ class CMTA(nn.Module):
         self.alpha=alpha
         self.beta=beta
         self.tokenS=tokenS
+        self.GT=GT
+        self.PT=PT
         ###
         self.size_dict = {
             "pathomics": {"small": [1024, 256, 256], "large": [1024, 512, 256]},
@@ -335,12 +337,12 @@ class CMTA(nn.Module):
         #=============== token selection;
 
         if self.tokenS=="both":
-            patch_token_pathomics_encoder=self.token_selection(patch_token_pathomics_encoder, cls_token_pathomics_encoder)
-            patch_token_genomics_encoder=self.token_selection(patch_token_genomics_encoder, cls_token_genomics_encoder)
+            patch_token_pathomics_encoder=self.token_selection(patch_token_pathomics_encoder, cls_token_pathomics_encoder,self.PT)
+            patch_token_genomics_encoder=self.token_selection(patch_token_genomics_encoder, cls_token_genomics_encoder,self.GT)
         elif self.tokenS=="P":
-            patch_token_pathomics_encoder=self.token_selection(patch_token_pathomics_encoder, cls_token_pathomics_encoder)
+            patch_token_pathomics_encoder=self.token_selection(patch_token_pathomics_encoder, cls_token_pathomics_encoder,self.PT)
         elif self.tokenS=="G":
-            patch_token_genomics_encoder=self.token_selection(patch_token_genomics_encoder, cls_token_genomics_encoder)
+            patch_token_genomics_encoder=self.token_selection(patch_token_genomics_encoder, cls_token_genomics_encoder,self.GT)
         elif self.tokenS=="N":
             pass
 

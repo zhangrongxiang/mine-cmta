@@ -9,8 +9,15 @@ def parse_args():
         "--data_root_dir", type=str, default="path/to/data_root_dir", help="Data directory to WSI features (extracted via CLAM"
     )
     parser.add_argument("--seed", type=int, default=3407, help="Random seed for reproducible experiment (default: 1)")
+    # =======================================
     parser.add_argument("--F_alpha", type=float, default=0.5, help="The proportion of genes involved in fusion")
     parser.add_argument("--F_beta", type=float, default=0.5, help="The proportion of fine particle size in multi-particle size fusion")
+
+    parser.add_argument("--GT", type=float, default=0.5, help="Temperature of gene token selection means current num*T")
+    parser.add_argument("--PT", type=float, default=0.5,
+                        help="Temperature of img token selection means current num*T")
+
+    # =======================================
     parser.add_argument(
         "--which_splits", type=str, default="5foldcv", help="Which splits folder to use in ./splits/ (Default: ./splits/5foldcv"
     )

@@ -99,6 +99,8 @@ def main(args):
                 "alpha": args.F_alpha,
                 "beta":args.F_beta,
                 "tokenS":args.tokenS,
+                "GT":args.GT,
+                "PT":args.PT,
             }
             model = CMTA(**model_dict)
             criterion = define_loss(args)
