@@ -12,6 +12,15 @@ from .util import MultiheadAttention
 
 # ==================================================================================
 
+def dissimilarity_loss(A, B):
+    assert A.shape == B.shape, "A and B must have the same shape"
+    A_flat = A.view(A.size(0), -1)  # 展平成 B x (N*Dim)
+    B_flat = B.view(B.size(0), -1)  # 展平成 B x (N*Dim)
+    euclidean_distance = torch.norm(A_flat - B_flat, p=2, dim=-1)
+    loss = (1 / (euclidean_distance + 1e-8)).mean()
+    return loss
+
+# 定义 FFNExpert 类
 class FFNExpert(nn.Module):
     def __init__(self, input_dim, hidden_dim):
         super(FFNExpert, self).__init__()
@@ -25,41 +34,43 @@ class FFNExpert(nn.Module):
         x = self.relu(self.bn1(self.fc1(x)))
         x = self.bn2(self.fc2(x))
         return x
-
-
+# 定义 MoE 类
 class MoE(nn.Module):
     def __init__(self, input_dim=512, num_experts=4, k=2):
         super(MoE, self).__init__()
         self.k = k
         self.gate = nn.Linear(input_dim, num_experts)
         self.experts = nn.ModuleList(
-            [FFNExpert(input_dim, input_dim) for _ in range(num_experts)])  # Updated to have input_dim output
+            [FFNExpert(input_dim, input_dim) for _ in range(num_experts)])
 
     def forward(self, x):
-        # x shape: [B, N, input_dim]
         B, N, input_dim = x.shape
-
-        # Reshape x to [B*N, input_dim] for processing
         x_reshaped = x.view(B * N, input_dim)
-        gate_scores = self.gate(x_reshaped)  # [B*N, num_experts]
-        topk_scores, topk_indices = gate_scores.view(B, N, -1).topk(self.k, dim=2)  # [B, N, k]
+        gate_scores = self.gate(x_reshaped)
+        topk_scores, topk_indices = gate_scores.view(B, N, -1).topk(self.k, dim=2)
+        bottomk_scores, bottomk_indices = gate_scores.view(B, N, -1).topk(self.k, dim=2, largest=False)
 
-        # Initialize the output tensor
-        expert_outputs = torch.zeros(B, N, self.k, input_dim,
-                                     device=x.device)  # Ensure output dimensions match input_dim
+        expert_outputs_top = torch.zeros(B, N, self.k, input_dim, device=x.device)
+        expert_outputs_bottom = torch.zeros(B, N, self.k, input_dim, device=x.device)
 
-        # Apply the selected experts to the input
         for b in range(B):
             for n in range(N):
                 for i, idx in enumerate(topk_indices[b, n]):
-                    expert_outputs[b, n, i] = self.experts[idx](x[b, n].unsqueeze(0))
+                    expert_outputs_top[b, n, i] = self.experts[idx](x[b, n].unsqueeze(0))
+                for i, idx in enumerate(bottomk_indices[b, n]):
+                    expert_outputs_bottom[b, n, i] = self.experts[idx](x[b, n].unsqueeze(0))
 
-        weights = torch.softmax(topk_scores, dim=2).unsqueeze(-1)  # [B, N, k, 1]
-        output = (weights * expert_outputs).sum(dim=2)  # [B, N, input_dim]
+        weights_top = torch.softmax(topk_scores, dim=2).unsqueeze(-1)
+        weights_bottom = torch.softmax(bottomk_scores, dim=2).unsqueeze(-1)
 
-        output = output + x
+        output_top = (weights_top * expert_outputs_top).sum(dim=2)
+        output_bottom = (weights_bottom * expert_outputs_bottom).sum(dim=2)
 
-        return output
+        orthogonality_loss = dissimilarity_loss(output_top, output_bottom)
+
+        output = output_top + x
+
+        return output, output_top, output_bottom, orthogonality_loss
 
 
 # =========================================================================================
@@ -169,16 +180,16 @@ class Transformer_G(nn.Module):
 
         h = self.layer1(h)  # [B, N, 512]
         # ---->MoE layer
-        h = self.moe(h)  # [B, N, 512]
+        h ,_1,__1,Nloss1= self.moe(h)  # [B, N, 512]
         # ---->PPEG
         # h = self.pos_layer(h, _H, _W)  # [B, N, 512]
         # ---->Translayer x2
         h = self.layer2(h)  # [B, N, 512]
         # ---->cls_token
         # ---->MoE layer
-        h = self.moe(h)  # [B, N, 512]
+        h ,_2,__2,Nloss2= self.moe(h)  # [B, N, 512]
 
-        return h[:, 0], h[:, 1:]
+        return h[:, 0], h[:, 1:],Nloss1+Nloss2
 
 
 class token_selection(nn.Module):
@@ -325,7 +336,7 @@ class CMTA(nn.Module):
         cls_token_pathomics_encoder, patch_token_pathomics_encoder = self.pathomics_encoder(
             pathomics_features)  # cls token + patch tokens
         # genomics encoder
-        cls_token_genomics_encoder, patch_token_genomics_encoder = self.genomics_encoder(
+        cls_token_genomics_encoder, patch_token_genomics_encoder ,Nloss1= self.genomics_encoder(
             genomics_features)  # cls token + patch tokens
 
         # print("cls_token_pathomics_encoder.shape: ",cls_token_pathomics_encoder.shape)
@@ -370,7 +381,7 @@ class CMTA(nn.Module):
         cls_token_pathomics_decoder, _ = self.pathomics_decoder(
             pathomics_in_genomics.transpose(1, 0))  # cls token + patch tokens
         # genomics decoder
-        cls_token_genomics_decoder, _ = self.genomics_decoder(
+        cls_token_genomics_decoder,_,Nloss2 = self.genomics_decoder(
             genomics_in_pathomics.transpose(1, 0))  # cls token + patch tokens
         # cls_token_pathomics_decoder, _ = self.genomics_decoder(patch_token_pathomics_encoder )
         # cls_token_genomics_decoder, _ = self.genomics_decoder(patch_token_genomics_encoder)
@@ -459,4 +470,4 @@ class CMTA(nn.Module):
         logits = self.classifier(fusion)  # [1, n_classes]
         hazards = torch.sigmoid(logits)
         S = torch.cumprod(1 - hazards, dim=1)
-        return hazards, S, cls_token_pathomics_encoder, cls_token_pathomics_decoder, cls_token_genomics_encoder, cls_token_genomics_decoder
+        return hazards, S, cls_token_pathomics_encoder, cls_token_pathomics_decoder, cls_token_genomics_encoder, cls_token_genomics_decoder,Nloss2+Nloss1

@@ -48,7 +48,7 @@ class Engine(object):
             # train for one epoch
             self.train(train_loader, model, criterion, optimizer)
             # evaluate on validation set
-            c_index = self.validate(val_loader, model, criterion)
+            c_index = self.validate(val_loader, model, criterion, self.args.modality)
             # remember best c-index and save checkpoint
             is_best = c_index > self.best_score
             if is_best:
@@ -88,7 +88,7 @@ class Engine(object):
                 label = label.type(torch.LongTensor).cuda()
                 c = c.type(torch.FloatTensor).cuda()
 
-            hazards, S, P, P_hat, G, G_hat = model(x_path=data_WSI, x_omic1=data_omic1, x_omic2=data_omic2,
+            hazards, S, P, P_hat, G, G_hat,MLoss = model(x_path=data_WSI, x_omic1=data_omic1, x_omic2=data_omic2,
                                                    x_omic3=data_omic3, x_omic4=data_omic4, x_omic5=data_omic5,
                                                    x_omic6=data_omic6)
 
@@ -97,6 +97,9 @@ class Engine(object):
             sim_loss_P = criterion[1](P.detach(), P_hat)
             sim_loss_G = criterion[1](G.detach(), G_hat)
             loss = sur_loss + self.args.alpha * (sim_loss_P + sim_loss_G)
+
+            if self.args.MoELoss:
+                loss+=self.args.LossRate*MLoss
 
             risk = -torch.sum(S, dim=1).detach().cpu().numpy()
             all_risk_scores[batch_idx] = risk
@@ -133,7 +136,7 @@ class Engine(object):
             self.writer.add_scalar('train/loss', train_loss, self.epoch)
             self.writer.add_scalar('train/c_index', c_index, self.epoch)
 
-    def validate(self, data_loader, model, criterion):
+    def validate(self, data_loader, model, criterion,modality):
         model.eval()
         val_loss = 0.0
         all_risk_scores = np.zeros((len(data_loader)))
@@ -152,9 +155,22 @@ class Engine(object):
                 data_omic6 = data_omic6.type(torch.FloatTensor).cuda()
                 label = label.type(torch.LongTensor).cuda()
                 c = c.type(torch.FloatTensor).cuda()
+                if modality == 'Both':
+                    pass
+                if modality == 'G':
+                    data_omic1 = torch.zeros_like(data_omic1).cuda()
+                    data_omic2 = torch.zeros_like(data_omic2).cuda()
+                    data_omic3 = torch.zeros_like(data_omic3).cuda()
+                    data_omic4 = torch.zeros_like(data_omic4).cuda()
+                    data_omic5 = torch.zeros_like(data_omic5).cuda()
+                    data_omic6 = torch.zeros_like(data_omic6).cuda()
+                if modality == 'P':
+                    data_WSI = torch.zeros_like(data_WSI).cuda()
+
+
 
             with torch.no_grad():
-                hazards, S, P, P_hat, G, G_hat = model(x_path=data_WSI, x_omic1=data_omic1, x_omic2=data_omic2,
+                hazards, S, P, P_hat, G, G_hat ,MLoss= model(x_path=data_WSI, x_omic1=data_omic1, x_omic2=data_omic2,
                                                        x_omic3=data_omic3,
                                                        x_omic4=data_omic4, x_omic5=data_omic5,
                                                        x_omic6=data_omic6)  # return hazards, S, Y_hat, A_raw, results_dict
@@ -164,6 +180,8 @@ class Engine(object):
             sim_loss_P = criterion[1](P.detach(), P_hat)
             sim_loss_G = criterion[1](G.detach(), G_hat)
             loss = sur_loss + self.args.alpha * (sim_loss_P + sim_loss_G)
+            if self.args.MoELoss:
+                loss+=self.args.LossRate*MLoss
 
             risk = -torch.sum(S, dim=1).cpu().numpy()
             all_risk_scores[batch_idx] = risk
