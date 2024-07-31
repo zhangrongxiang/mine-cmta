@@ -403,6 +403,57 @@ class Nystromformer(nn.Module):
         return x
 
 
+class MFFNExpert(nn.Module):
+    def __init__(self, input_dim, hidden_dim, weight=None, bias=None):
+        super(MFFNExpert, self).__init__()
+        self.fc1 = nn.Linear(input_dim, hidden_dim)
+        self.bn1 = nn.LayerNorm(hidden_dim)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(hidden_dim, input_dim)
+        self.bn2 = nn.LayerNorm(input_dim)
+
+        # 如果提供了权重和偏置初始化参数，进行手动初始化
+        if weight is not None and bias is not None:
+            self.fc1.weight = nn.Parameter(weight)
+            self.fc1.bias = nn.Parameter(bias)
+            self.fc2.weight = nn.Parameter(weight)
+            self.fc2.bias = nn.Parameter(bias)
+
+    def forward(self, x):
+        x = self.relu(self.bn1(self.fc1(x)))
+        x = self.bn2(self.fc2(x))
+        return x
+
+class MMoE(nn.Module):
+    def __init__(self, input_dim=512, num_experts=4, k=2, weight=None, bias=None):
+        super(MMoE, self).__init__()
+        self.k = k
+        self.gate = nn.Linear(input_dim, num_experts)
+        self.experts = nn.ModuleList(
+            [MFFNExpert(input_dim, input_dim, weight, bias) for _ in range(num_experts)]
+        )
+
+    def forward(self, x):
+        tgt_len, bsz, input_dim = x.shape
+        x_reshaped = x.view(tgt_len * bsz, input_dim)
+        gate_scores = self.gate(x_reshaped)
+        topk_scores, topk_indices = gate_scores.view(tgt_len, bsz, -1).topk(self.k, dim=2)
+
+        expert_outputs_top = torch.zeros(tgt_len, bsz, self.k, input_dim, device=x.device)
+
+        for t in range(tgt_len):
+            for b in range(bsz):
+                for i, idx in enumerate(topk_indices[t, b]):
+                    expert_outputs_top[t, b, i] = self.experts[idx](x[t, b].unsqueeze(0))
+
+        weights_top = torch.softmax(topk_scores, dim=2).unsqueeze(-1)
+
+        output_top = (weights_top * expert_outputs_top).sum(dim=2)
+
+        output = output_top + x
+
+        return output
+
 def multi_head_attention_forward(
         query: Tensor,
         key: Tensor,
@@ -512,6 +563,7 @@ def multi_head_attention_forward(
             static_k=static_k,
             static_v=static_v,
         )
+
     tgt_len, bsz, embed_dim = query.size()
     assert embed_dim == embed_dim_to_check
     # allow MHA to have different sizes for the feature dimension
@@ -700,7 +752,9 @@ def multi_head_attention_forward(
     attn_output = torch.bmm(attn_output_weights, v)
     assert list(attn_output.size()) == [bsz * num_heads, tgt_len, head_dim]
     attn_output = attn_output.transpose(0, 1).contiguous().view(tgt_len, bsz, embed_dim)
-    attn_output = F.linear(attn_output, out_proj_weight, out_proj_bias)
+    moe = MMoE(input_dim=attn_output.size(2), num_experts=4, k=2, weight=out_proj_weight, bias=out_proj_bias)
+    # attn_output = F.linear(attn_output, out_proj_weight, out_proj_bias)
+    attn_output=moe(attn_output)
 
     if need_weights:
         if need_raw:

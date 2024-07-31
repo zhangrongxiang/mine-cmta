@@ -227,7 +227,7 @@ from hypll import nn as hnn
 manifold = PoincareBall(c=Curvature(requires_grad=True))
 
 class CMTA(nn.Module):
-    def __init__(self, omic_sizes=[100, 200, 300, 400, 500, 600], n_classes=4, fusion="concat", model_size="small",alpha=0.5,beta=0.5,tokenS="both",GT=0.5,PT=0.5):
+    def __init__(self, omic_sizes=[100, 200, 300, 400, 500, 600], n_classes=4, fusion="concat", model_size="small",alpha=0.5,beta=0.5,tokenS="both",GT=0.5,PT=0.5,HRate=1e-8):
         super(CMTA, self).__init__()
 
         self.omic_sizes = omic_sizes
@@ -238,6 +238,7 @@ class CMTA(nn.Module):
         self.tokenS=tokenS
         self.GT=GT
         self.PT=PT
+        self.HRate=HRate
         ###
         self.size_dict = {
             "pathomics": {"small": [1024, 256, 256], "large": [1024, 512, 256]},
@@ -310,6 +311,9 @@ class CMTA(nn.Module):
                 self.hyperbolic_fc2,
                 self.hyperbolic_relu,
                 self.hyperbolic_fc2
+            )
+            self.mm = nn.Sequential(
+                *[nn.Linear(hidden[-1] * 2, hidden[-1]), nn.ReLU(), nn.Linear(hidden[-1], hidden[-1]), nn.ReLU()]
             )
         else:
             raise NotImplementedError("Fusion [{}] is not implemented".format(self.fusion))
@@ -460,7 +464,19 @@ class CMTA(nn.Module):
             # log_mapped_fusion = manifold.logmap(origin, fusion_hy)
 
             # Step 7: Retrieve the tensor from the log-mapped structure
-            fusion = fusion_hy.tensor
+
+            fusion_e = self.mm(
+                torch.concat(
+                    (
+                        (cls_token_pathomics_encoder + cls_token_pathomics_decoder) / 2,
+                        (cls_token_genomics_encoder + cls_token_genomics_decoder) / 2,
+                    ),
+                    dim=1,
+                )
+            )  # take cls token to make prediction
+
+            fusion = fusion_hy.tensor*self.HRate+fusion_e
+
         else:
             raise NotImplementedError("Fusion [{}] is not implemented".format(self.fusion))
         # fusion=( cls_token_genomics_decoder +  cls_token_genomics_encoder) / 2
