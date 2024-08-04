@@ -31,9 +31,8 @@ def main(args):
     set_seed(args.seed)
 
     # create results directory
-    results_dir = "./results/{dataset}/[{model}]-[{fusion}]-[{alpha}]-[{time}]".format(
+    results_dir = "./results/{dataset}/[{fusion}]-[{alpha}]-[{time}]".format(
         dataset=args.dataset,
-        model=args.model,
         fusion=args.fusion,
         alpha=args.alpha,
         time=time.strftime("%Y-%m-%d]-[%H-%M-%S"),
@@ -127,6 +126,7 @@ def main(args):
     best_score.append(np.mean(best_score[1:6]))
     best_score.append(np.std(best_score[1:6]))
 
+
     csv_path = os.path.join(results_dir, "results.csv")
     print("############", csv_path)
     with open(csv_path, "w", encoding="utf-8", newline="") as fp:
@@ -134,8 +134,9 @@ def main(args):
         writer.writerow(header)
         writer.writerow(best_epoch)
         writer.writerow(best_score)
-
-
+    mean_score=np.mean(best_score[1:6])
+    new_dir_name = f"{results_dir}_{mean_score:.2f}__{args.modality}__[{args.GT}_{args.PT}]__[{args.lr}]_{args.weight_decay}]"
+    os.rename(results_dir, new_dir_name)
 if __name__ == "__main__":
     args = parse_args()
     results = main(args)
