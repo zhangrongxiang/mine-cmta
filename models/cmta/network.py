@@ -296,14 +296,7 @@ class CMTA(nn.Module):
             )
         elif self.fusion == "bilinear":
             self.mm = BilinearFusion(dim1=hidden[-1], dim2=hidden[-1], scale_dim1=8, scale_dim2=8, mmhid=hidden[-1])
-        elif self.fusion == "hyperbolic":
-            self.hyperbolic_mm = nn.Sequential(
-                self.hyperbolic_fc1,
-                self.hyperbolic_relu,
-                self.hyperbolic_fc2,
-                self.hyperbolic_relu,
-                self.hyperbolic_fc2
-            )
+
         elif self.fusion == "hyperbolic":
             self.hyperbolic_mm = nn.Sequential(
                 self.hyperbolic_fc1,
