@@ -752,9 +752,9 @@ def multi_head_attention_forward(
     attn_output = torch.bmm(attn_output_weights, v)
     assert list(attn_output.size()) == [bsz * num_heads, tgt_len, head_dim]
     attn_output = attn_output.transpose(0, 1).contiguous().view(tgt_len, bsz, embed_dim)
-    moe = MMoE(input_dim=attn_output.size(2), num_experts=4, k=2, weight=out_proj_weight, bias=out_proj_bias)
-    # attn_output = F.linear(attn_output, out_proj_weight, out_proj_bias)
-    attn_output=moe(attn_output)
+    # moe = MMoE(input_dim=attn_output.size(2), num_experts=4, k=2, weight=out_proj_weight, bias=out_proj_bias)
+    attn_output = F.linear(attn_output, out_proj_weight, out_proj_bias)
+    # attn_output=moe(attn_output)
 
     if need_weights:
         if need_raw:
