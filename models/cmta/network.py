@@ -89,7 +89,7 @@ class TransLayer(nn.Module):
             # number of moore-penrose iterations for approximating pinverse. 6 was recommended by the paper
             residual=True,
             # whether to do an extra residual with the value or not. supposedly faster convergence if turned on
-            dropout=0.1,
+            dropout=0.5,
         )
         self.moe = MoE(input_dim=dim, num_experts=num_experts, k=k)
 
@@ -199,17 +199,17 @@ class token_selection(nn.Module):
         self.MLP_s= nn.Linear(256, 256)
         self.softmax = nn.Softmax(dim=1)
         self.relu = nn.ReLU()
-        self.dropout = nn.Dropout(0.25)
+        self.dropout = nn.Dropout(0.5)
 
     def forward(self, start_patch_token, cls_token,Temperature):
         half_token_patch = self.MLP_f(start_patch_token)
-        half_token_patch = self.dropout(half_token_patch)
+        half_token_patch = self.relu(self.dropout(half_token_patch))
         half_token_cls = self.MLP_f(cls_token)
         half_token_cls = half_token_cls.unsqueeze(1)
         half_token_cls = half_token_cls.repeat(1, start_patch_token.size(1), 1)  # Corrected this line
         patch_token = torch.cat([half_token_cls, half_token_patch], dim=2)
         patch_token = self.MLP_s(patch_token)
-        patch_token = self.dropout(patch_token)
+        patch_token = self.relu(self.dropout(patch_token))
         _patch_token = self.softmax(patch_token)
         topk_values, topk_indices = torch.topk(_patch_token, math.ceil(start_patch_token.size(1)*Temperature), dim=1)
         final_token = torch.gather(start_patch_token, 1, topk_indices.squeeze(1))  # Squeeze the last dimension here
@@ -250,7 +250,7 @@ class CMTA(nn.Module):
         for idx in range(len(hidden) - 1):
             fc.append(nn.Linear(hidden[idx], hidden[idx + 1]))
             fc.append(nn.ReLU())
-            fc.append(nn.Dropout(0.25))
+            fc.append(nn.Dropout(0.5))
         self.pathomics_fc = nn.Sequential(*fc)
         # Genomic Embedding Network
         hidden = self.size_dict["genomics"][model_size]
@@ -258,7 +258,7 @@ class CMTA(nn.Module):
         for input_dim in omic_sizes:
             fc_omic = [SNN_Block(dim1=input_dim, dim2=hidden[0])]
             for i, _ in enumerate(hidden[1:]):
-                fc_omic.append(SNN_Block(dim1=hidden[i], dim2=hidden[i + 1], dropout=0.25))
+                fc_omic.append(SNN_Block(dim1=hidden[i], dim2=hidden[i + 1], dropout=0.5))
             sig_networks.append(nn.Sequential(*fc_omic))
         self.genomics_fc = nn.ModuleList(sig_networks)
 
