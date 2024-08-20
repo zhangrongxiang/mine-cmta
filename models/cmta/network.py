@@ -215,21 +215,69 @@ class token_selection(nn.Module):
         final_token = torch.gather(start_patch_token, 1, topk_indices.squeeze(1))  # Squeeze the last dimension here
 
         return final_token
+import torch.nn.functional as F
+def build_edge_index(input_features, threshold=0.7, k=None):
+    """
+    Build edge_index based on node features using cosine similarity to measure relationships between nodes.
 
+    Parameters:
+    input_features (torch.Tensor): Node feature matrix, shape [num_nodes, num_features]
+    threshold (float): Cosine similarity threshold for connecting nodes
+    k (int, optional): Retain top k most similar nodes for each node (if not None)
 
+    Returns:
+    edge_index (torch.Tensor): Built edge set, shape [2, num_edges]
+    """
+    num_nodes = input_features.size(0)
+
+    # Calculate cosine similarity between all pairs of nodes
+    similarity_matrix = F.cosine_similarity(input_features.unsqueeze(1), input_features.unsqueeze(0), dim=-1)
+
+    # If threshold is set, select node pairs with similarity greater than the threshold
+    if threshold is not None:
+        edge_index = (similarity_matrix > threshold).nonzero(as_tuple=False).t()
+
+    # Or, select top k most similar nodes for each node
+    elif k is not None:
+        _, topk_indices = similarity_matrix.topk(k=k, dim=-1)
+        row_indices = torch.arange(num_nodes).repeat_interleave(k)
+        edge_index = torch.stack([row_indices, topk_indices.view(-1)], dim=0)
+
+    return edge_index
+
+class GCNNetwork(nn.Module):
+    def __init__(self, hidden):
+        super(GCNNetwork, self).__init__()
+
+        # Construct GCN layers
+        self.gcn_layers = nn.ModuleList()
+        for idx in range(len(hidden) - 1):
+            self.gcn_layers.append(GCNConv(hidden[idx], hidden[idx + 1]))
+
+        self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(0.5)
+
+    def forward(self, x, edge_index):
+        # x: Node feature matrix, edge_index: Edge set of the graph
+        for gcn in self.gcn_layers:
+            x = gcn(x, edge_index)  # GCN operation
+            x = self.relu(x)
+            x = self.dropout(x)
+        return x
 
 from hypll.manifolds.poincare_ball import Curvature, PoincareBall
 from hypll.tensors import TangentTensor
 from torch import nn
 from hypll import nn as hnn
-
+from torch_geometric.nn import GCNConv
 
 manifold = PoincareBall(c=Curvature(requires_grad=True))
 
 class CMTA(nn.Module):
-    def __init__(self, omic_sizes=[100, 200, 300, 400, 500, 600], n_classes=4, fusion="concat", model_size="small",alpha=0.5,beta=0.5,tokenS="both",GT=0.5,PT=0.5,HRate=1e-8):
+    def __init__(self, omic_sizes=[100, 200, 300, 400, 500, 600], n_classes=4, fusion="concat", model_size="small",alpha=0.5,beta=0.5,tokenS="both",GT=0.5,PT=0.5,HRate=1e-8,gcnFlag=False):
         super(CMTA, self).__init__()
-
+        self.hidden_sizes = [1024, 512, 256]
+        self.gcn=GCNNetwork(self.hidden_sizes)
         self.omic_sizes = omic_sizes
         self.n_classes = n_classes
         self.fusion = fusion
@@ -239,6 +287,7 @@ class CMTA(nn.Module):
         self.GT=GT
         self.PT=PT
         self.HRate=HRate
+        self.gcnFlag=gcnFlag
         ###
         self.size_dict = {
             "pathomics": {"small": [1024, 256, 256], "large": [1024, 512, 256]},
@@ -325,7 +374,15 @@ class CMTA(nn.Module):
         genomics_features = [self.genomics_fc[idx].forward(sig_feat) for idx, sig_feat in enumerate(x_omic)]
         genomics_features = torch.stack(genomics_features).unsqueeze(0)  # [1, 6, 1024]
         # pathomics embedding
-        pathomics_features = self.pathomics_fc(x_path).unsqueeze(0)
+
+
+        if self.gcnFlag:
+            edge_index = build_edge_index(x_path, threshold=0.7)
+            pathomics_features=self.gcn(x_path, edge_index).unsqueeze(0)
+        else:
+            pathomics_features = self.pathomics_fc(x_path).unsqueeze(0)
+
+
         # print("genomics_features.shape: ",genomics_features.shape)
         # print("pathomics_features.shape:",pathomics_features.shape)
         # encoder
