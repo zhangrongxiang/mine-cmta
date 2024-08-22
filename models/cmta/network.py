@@ -89,7 +89,7 @@ class TransLayer(nn.Module):
             # number of moore-penrose iterations for approximating pinverse. 6 was recommended by the paper
             residual=True,
             # whether to do an extra residual with the value or not. supposedly faster convergence if turned on
-            dropout=0.5,
+            dropout=0.1,
         )
         self.moe = MoE(input_dim=dim, num_experts=num_experts, k=k)
 
@@ -199,7 +199,7 @@ class token_selection(nn.Module):
         self.MLP_s= nn.Linear(256, 256)
         self.softmax = nn.Softmax(dim=1)
         self.relu = nn.ReLU()
-        self.dropout = nn.Dropout(0.5)
+        self.dropout = nn.Dropout(0.25)
 
     def forward(self, start_patch_token, cls_token,Temperature):
         half_token_patch = self.MLP_f(start_patch_token)
@@ -307,7 +307,7 @@ class CMTA(nn.Module):
         for input_dim in omic_sizes:
             fc_omic = [SNN_Block(dim1=input_dim, dim2=hidden[0])]
             for i, _ in enumerate(hidden[1:]):
-                fc_omic.append(SNN_Block(dim1=hidden[i], dim2=hidden[i + 1], dropout=0.5))
+                fc_omic.append(SNN_Block(dim1=hidden[i], dim2=hidden[i + 1], dropout=0.25))
             sig_networks.append(nn.Sequential(*fc_omic))
         self.genomics_fc = nn.ModuleList(sig_networks)
 
