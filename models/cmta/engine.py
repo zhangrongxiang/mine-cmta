@@ -3,7 +3,7 @@ import numpy as np
 from tqdm import tqdm
 
 from sksurv.metrics import concordance_index_censored
-
+import torch.nn as nn
 import torch.optim
 import torch.nn.parallel
 # from early_stopping import EarlyStopping
@@ -89,11 +89,13 @@ class Engine(object):
                 label = label.type(torch.LongTensor).cuda()
                 c = c.type(torch.FloatTensor).cuda()
 
-            hazards, S, P, P_hat, G, G_hat,MLoss = model(x_path=data_WSI, x_omic1=data_omic1, x_omic2=data_omic2,
+            hazards, S, P, P_hat, G, G_hat,MLoss,fusion = model(x_path=data_WSI, x_omic1=data_omic1, x_omic2=data_omic2,
                                                    x_omic3=data_omic3, x_omic4=data_omic4, x_omic5=data_omic5,
                                                    x_omic6=data_omic6)
 
             # survival loss + sim loss + sim loss
+            criterion_re=nn.MSELoss()
+            loss_re=criterion_re(fusion,(G + G_hat) / 2)
             sur_loss = criterion[0](hazards=hazards, S=S, Y=label, c=c)
             sim_loss_P = criterion[1](P.detach(), P_hat)
             sim_loss_G = criterion[1](G.detach(), G_hat)
@@ -101,6 +103,8 @@ class Engine(object):
 
             if self.args.MoELoss:
                 loss+=self.args.LossRate*MLoss
+            if self.args.ReLoss:
+                loss+=self.args.LossRate*loss_re
 
             risk = -torch.sum(S, dim=1).detach().cpu().numpy()
             all_risk_scores[batch_idx] = risk
@@ -185,18 +189,23 @@ class Engine(object):
 
 
             with torch.no_grad():
-                hazards, S, P, P_hat, G, G_hat ,MLoss= model(x_path=data_WSI, x_omic1=data_omic1, x_omic2=data_omic2,
+                hazards, S, P, P_hat, G, G_hat ,MLoss,fusion= model(x_path=data_WSI, x_omic1=data_omic1, x_omic2=data_omic2,
                                                        x_omic3=data_omic3,
                                                        x_omic4=data_omic4, x_omic5=data_omic5,
                                                        x_omic6=data_omic6)  # return hazards, S, Y_hat, A_raw, results_dict
 
             # survival loss + sim loss + sim loss
+            criterion_re=nn.MSELoss()
+            loss_re=criterion_re(fusion,(G + G_hat) / 2)
             sur_loss = criterion[0](hazards=hazards, S=S, Y=label, c=c)
             sim_loss_P = criterion[1](P.detach(), P_hat)
             sim_loss_G = criterion[1](G.detach(), G_hat)
             loss = sur_loss + self.args.alpha * (sim_loss_P + sim_loss_G)
+
             if self.args.MoELoss:
                 loss+=self.args.LossRate*MLoss
+            if self.args.ReLoss:
+                loss+=self.args.LossRate*loss_re
 
             risk = -torch.sum(S, dim=1).cpu().numpy()
             all_risk_scores[batch_idx] = risk

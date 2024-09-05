@@ -91,7 +91,8 @@ def parse_args():
     )
     parser.add_argument("--MoELoss", action="store_false", default=False, help=" MoE Negative distance loss")
     parser.add_argument("--gcnFlag", action="store_true", default=False, help=" GCN Flag")
-    parser.add_argument("--LossRate", type=float, default=1e-5, help="MoELoss rate")
+    parser.add_argument("--ReLoss", action="store_true", default=False, help=" reconstruction Flag")
+    parser.add_argument("--LossRate", type=float, default=1e-5, help="Loss rate")
     parser.add_argument("--HRate", type=float, default=1e-10, help="Hyperbolic rate")
     parser.add_argument("--modality", type=str, choices=["Both", "G", "P"],default="Both",help= "Modality to test")
     # =======================================
