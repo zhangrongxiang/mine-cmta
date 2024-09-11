@@ -197,7 +197,7 @@ class Engine(object):
 
             # survival loss + sim loss + sim loss
             criterion_re=nn.MSELoss()
-            loss_re=criterion_re(fusion,(G + G_hat) / 2)
+            # loss_re=criterion_re(fusion,(G + G_hat) / 2)
             sur_loss = criterion[0](hazards=hazards, S=S, Y=label, c=c)
             # sim_loss_P = criterion[1](P.detach(), P_hat)
             # sim_loss_G = criterion[1](G.detach(), G_hat)
