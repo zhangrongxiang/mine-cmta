@@ -199,14 +199,15 @@ class Engine(object):
             criterion_re=nn.MSELoss()
             loss_re=criterion_re(fusion,(G + G_hat) / 2)
             sur_loss = criterion[0](hazards=hazards, S=S, Y=label, c=c)
-            sim_loss_P = criterion[1](P.detach(), P_hat)
-            sim_loss_G = criterion[1](G.detach(), G_hat)
-            loss = sur_loss + self.args.alpha * (sim_loss_P + sim_loss_G)
+            # sim_loss_P = criterion[1](P.detach(), P_hat)
+            # sim_loss_G = criterion[1](G.detach(), G_hat)
+            sim_loss= criterion[1](P, G)
+            loss = sur_loss + self.args.alpha * sim_loss
 
-            if self.args.MoELoss:
-                loss+=self.args.LossRate*MLoss
-            if self.args.ReLoss:
-                loss+=self.args.LossRate*loss_re
+            # if self.args.MoELoss:
+            #     loss+=self.args.LossRate*MLoss
+            # if self.args.ReLoss:
+            #     loss+=self.args.LossRate*loss_re
 
             risk = -torch.sum(S, dim=1).cpu().numpy()
             all_risk_scores[batch_idx] = risk
