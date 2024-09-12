@@ -265,8 +265,8 @@ class Transformer_P(nn.Module):
         h = self.layer1(h)  # [B, N, 512]
         h = self.moe2(h)
         h = self.layer2(h)
-        h = self.moe3(h)
-        h = self.layer3(h)
+        # h = self.moe3(h)
+        # h = self.layer3(h)
         # ---->MoE layer
         #   h = self.moe(h)  # [B, N, 512]
         # ---->PPEG
@@ -316,8 +316,8 @@ class Transformer_G(nn.Module):
         h = self.layer1(h)  # [B, N, 512]
         h = self.moe2(h)
         h = self.layer2(h)
-        h = self.moe3(h)
-        h = self.layer3(h)
+        # h = self.moe3(h)
+        # h = self.layer3(h)
 
         return h[:, 0], h[:, 1:]
 
