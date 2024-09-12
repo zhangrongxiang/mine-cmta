@@ -13,6 +13,21 @@ from utils.loss import define_loss
 from utils.optimizer import define_optimizer
 from utils.scheduler import define_scheduler
 
+def get_git_commit_hash(repo_path):
+    try:
+        head_file = os.path.join(repo_path, '.git', 'HEAD')
+        with open(head_file, 'r') as f:
+            ref = f.read().strip()
+
+        if ref.startswith('ref: '):
+            ref_path = os.path.join(repo_path, '.git', ref[5:])
+            with open(ref_path, 'r') as f:
+                commit_hash = f.read().strip()
+            return commit_hash
+        else:
+            return ref
+    except Exception as e:
+        print(f"Exception: {e}")
 
 class FlushFile:
     def __init__(self, f):
@@ -46,9 +61,11 @@ def main(args):
     header = ["folds", "fold 0", "fold 1", "fold 2", "fold 3", "fold 4", "mean", "std"]
     best_epoch = ["best epoch"]
     best_score = ["best cindex"]
-
+    repo_path = os.getcwd()
+    commit_hash = get_git_commit_hash(repo_path)
     print("=======================================")
     print("所有参数：", vars(args))
+    print("git info: ",commit_hash)
     print("=======================================")
 
     # start 5-fold CV evaluation.
