@@ -98,28 +98,45 @@ class TransLayer(nn.Module):
         return x
 
 
-class PPEG(nn.Module):
-    def __init__(self, dim=512):
-        super(PPEG, self).__init__()
-        self.proj = nn.Conv2d(dim, dim, 7, 1, 7 // 2, groups=dim)
-        self.proj1 = nn.Conv2d(dim, dim, 5, 1, 5 // 2, groups=dim)
-        self.proj2 = nn.Conv2d(dim, dim, 3, 1, 3 // 2, groups=dim)
+# class PPEG(nn.Module):
+#     def __init__(self, dim=512):
+#         super(PPEG, self).__init__()
+#         self.proj = nn.Conv2d(dim, dim, 7, 1, 7 // 2, groups=dim)
+#         self.proj1 = nn.Conv2d(dim, dim, 5, 1, 5 // 2, groups=dim)
+#         self.proj2 = nn.Conv2d(dim, dim, 3, 1, 3 // 2, groups=dim)
+#
+#     def forward(self, x, H, W):
+#         B, _, C = x.shape
+#         cls_token, feat_token = x[:, 0], x[:, 1:]
+#         cnn_feat = feat_token.transpose(1, 2).view(B, C, H, W)
+#         x = self.proj(cnn_feat) + cnn_feat + self.proj1(cnn_feat) + self.proj2(cnn_feat)
+#         x = x.flatten(2).transpose(1, 2)
+#         x = torch.cat((cls_token.unsqueeze(1), x), dim=1)
+#         return x
+class EPEG(nn.Module):
+    def __init__(self, dim, epeg_k=15, epeg_type='attn', epeg_2d=False):
+        super(EPEG, self).__init__()
+        padding = epeg_k // 2
+        if epeg_2d:
+            self.pe = nn.Conv2d(dim, dim, epeg_k, padding=padding, groups=dim)
+        else:
+            self.pe = nn.Conv2d(dim, dim, (epeg_k, 1), padding=(padding, 0), groups=dim)
 
     def forward(self, x, H, W):
         B, _, C = x.shape
         cls_token, feat_token = x[:, 0], x[:, 1:]
         cnn_feat = feat_token.transpose(1, 2).view(B, C, H, W)
-        x = self.proj(cnn_feat) + cnn_feat + self.proj1(cnn_feat) + self.proj2(cnn_feat)
+        x = self.pe(cnn_feat)
         x = x.flatten(2).transpose(1, 2)
         x = torch.cat((cls_token.unsqueeze(1), x), dim=1)
         return x
 
 
 class Transformer_P(nn.Module):
-    def __init__(self, feature_dim=512, num_experts=4, k=2):
+    def __init__(self, feature_dim=512, num_experts=4, k=2,conv2d=False):
         super(Transformer_P, self).__init__()
         # Encoder
-        self.pos_layer = PPEG(dim=feature_dim)
+        self.pos_layer = EPEG(dim=feature_dim,epeg_2d=conv2d)
         self.cls_token = nn.Parameter(torch.randn(1, 1, feature_dim))
         nn.init.normal_(self.cls_token, std=1e-6)
         self.layer1 = TransLayer(dim=feature_dim)
@@ -153,10 +170,10 @@ class Transformer_P(nn.Module):
 
 
 class Transformer_G(nn.Module):
-    def __init__(self, feature_dim=512, num_experts=4, k=2):
+    def __init__(self, feature_dim=512, num_experts=4, k=2,conv2d=False):
         super(Transformer_G, self).__init__()
         # Encoder
-        self.pos_layer = PPEG(dim=feature_dim)
+        self.pos_layer = EPEG(dim=feature_dim,epeg_2d=conv2d)
         self.cls_token = nn.Parameter(torch.randn(1, 1, feature_dim))
         nn.init.normal_(self.cls_token, std=1e-6)
         self.layer1 = TransLayer(dim=feature_dim)
@@ -274,7 +291,7 @@ from torch_geometric.nn import GCNConv
 manifold = PoincareBall(c=Curvature(requires_grad=True))
 
 class CMTA(nn.Module):
-    def __init__(self, omic_sizes=[100, 200, 300, 400, 500, 600], n_classes=4, fusion="concat", model_size="small",alpha=0.5,beta=0.5,tokenS="both",GT=0.5,PT=0.5,HRate=1e-8,gcnFlag=False):
+    def __init__(self, omic_sizes=[100, 200, 300, 400, 500, 600], n_classes=4, fusion="concat", model_size="small",alpha=0.5,beta=0.5,tokenS="both",GT=0.5,PT=0.5,HRate=1e-8,gcnFlag=False,conv2d=False):
         super(CMTA, self).__init__()
         self.hidden_sizes = [1024, 512, 256]
         self.gcn=GCNNetwork(self.hidden_sizes)
@@ -293,6 +310,7 @@ class CMTA(nn.Module):
             "pathomics": {"small": [1024, 256, 256], "large": [1024, 512, 256]},
             "genomics": {"small": [1024, 256], "large": [1024, 1024, 1024, 256]},
         }
+        self.conv2d=conv2d
         # Pathomics Embedding Network
         hidden = self.size_dict["pathomics"][model_size]
         fc = []
@@ -313,7 +331,7 @@ class CMTA(nn.Module):
 
         # Pathomics Transformer
         # Encoder
-        self.pathomics_encoder = Transformer_P(feature_dim=hidden[-1])
+        self.pathomics_encoder = Transformer_P(feature_dim=hidden[-1],conv2d=self.conv2d)
         # Decoder
         self.pathomics_decoder = Transformer_P(feature_dim=hidden[-1])
 

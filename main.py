@@ -118,7 +118,8 @@ def main(args):
                 "GT":args.GT,
                 "PT":args.PT,
                 "HRate":args.HRate,
-                "gcnFlag":args.gcnFlag
+                "gcnFlag":args.gcnFlag,
+                "conv2d":args.conv2d,
             }
             model = CMTA(**model_dict)
             criterion = define_loss(args)
